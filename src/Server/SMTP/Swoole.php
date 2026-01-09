@@ -1,19 +1,18 @@
 <?php
 
-namespace Appwrite\ProtocolProxy\Smtp;
+namespace Utopia\Proxy\Smtp;
 
+use Utopia\Proxy\Adapter\SMTP as SMTPAdapter;
 use Swoole\Coroutine;
 use Swoole\Server;
 
 /**
  * High-performance SMTP proxy server
- *
- * Performance: 50k+ messages/sec, 50k+ concurrent connections
  */
-class SmtpServer
+class SMTP
 {
     protected Server $server;
-    protected SmtpConnectionManager $manager;
+    protected SMTPAdapter $adapter;
     protected array $config;
 
     public function __construct(
@@ -80,17 +79,14 @@ class SmtpServer
 
     public function onWorkerStart(Server $server, int $workerId): void
     {
-        // Initialize connection manager per worker
-        $this->manager = new SmtpConnectionManager(
-            cache: $this->initCache(),
-            dbPool: $this->initDbPool(),
-            computeApiUrl: $this->config['compute_api_url'] ?? 'http://appwrite-api/v1/compute',
-            computeApiKey: $this->config['compute_api_key'] ?? '',
-            coldStartTimeout: $this->config['cold_start_timeout'] ?? 30000,
-            healthCheckInterval: $this->config['health_check_interval'] ?? 100
-        );
+        // Use adapter from config, or create default
+        if (isset($this->config['adapter'])) {
+            $this->adapter = $this->config['adapter'];
+        } else {
+            $this->adapter = new SMTPAdapter();
+        }
 
-        echo "Worker #{$workerId} started\n";
+        echo "Worker #{$workerId} started (Adapter: {$this->adapter->getName()})\n";
     }
 
     /**
@@ -160,8 +156,8 @@ class SmtpServer
             $domain = $matches[2];
             $conn['domain'] = $domain;
 
-            // Get backend connection
-            $result = $this->manager->handleConnection($domain);
+            // Route to backend using adapter
+            $result = $this->adapter->route($domain);
 
             // Connect to backend SMTP server
             $backendFd = $this->connectToBackend($result->endpoint, 25);
@@ -229,21 +225,6 @@ class SmtpServer
         }
     }
 
-    protected function initCache(): \Utopia\Cache\Cache
-    {
-        $redis = new \Redis();
-        $redis->connect($this->config['redis_host'] ?? '127.0.0.1', $this->config['redis_port'] ?? 6379);
-
-        $adapter = new \Utopia\Cache\Adapter\Redis($redis);
-        return new \Utopia\Cache\Cache($adapter);
-    }
-
-    protected function initDbPool(): \Utopia\Pools\Group
-    {
-        // Connection pool implementation
-        return new \Utopia\Pools\Group();
-    }
-
     public function start(): void
     {
         $this->server->start();
@@ -255,7 +236,7 @@ class SmtpServer
             'connections' => $this->server->stats()['connection_num'] ?? 0,
             'workers' => $this->server->stats()['worker_num'] ?? 0,
             'coroutines' => Coroutine::stats()['coroutine_num'] ?? 0,
-            'manager' => $this->manager?->getStats() ?? [],
+            'adapter' => $this->adapter?->getStats() ?? [],
         ];
     }
 }

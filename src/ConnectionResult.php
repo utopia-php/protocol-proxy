@@ -1,6 +1,6 @@
 <?php
 
-namespace Appwrite\ProtocolProxy;
+namespace Utopia\Proxy;
 
 /**
  * Connection routing result

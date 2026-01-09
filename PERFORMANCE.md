@@ -148,17 +148,17 @@ ab -n 100000 -c 1000 http://localhost:8080/
 wrk -t12 -c1000 -d30s http://localhost:8080/
 
 # Custom benchmark
-php benchmarks/http-benchmark.php
+php benchmarks/http.php
 ```
 
 ### TCP Benchmark
 
 ```bash
 # PostgreSQL connections
-php benchmarks/tcp-benchmark.php
+php benchmarks/tcp.php
 
 # MySQL connections
-php benchmarks/tcp-benchmark.php --port=3306
+php benchmarks/tcp.php --port=3306
 ```
 
 ### Load Testing

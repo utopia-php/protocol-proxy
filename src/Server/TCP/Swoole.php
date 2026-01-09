@@ -1,21 +1,19 @@
 <?php
 
-namespace Appwrite\ProtocolProxy\Tcp;
+namespace Utopia\Proxy\Server\TCP;
 
-use Appwrite\ProtocolProxy\ConnectionManager;
+use Utopia\Proxy\Adapter\TCP\Swoole as TCPAdapter;
 use Swoole\Coroutine;
 use Swoole\Server;
 
 /**
- * High-performance TCP proxy server for database connections
- *
- * Performance: 100k+ connections/sec, 10GB/s+ throughput, <1ms overhead
+ * High-performance TCP proxy server (Swoole Implementation)
  */
-class TcpServer
+class Swoole
 {
     protected Server $server;
-    /** @var TcpConnectionManager[] */
-    protected array $managers = [];
+    /** @var array<TCPAdapter> */
+    protected array $adapters = [];
     protected array $config;
     protected array $ports;
 
@@ -94,17 +92,14 @@ class TcpServer
 
     public function onWorkerStart(Server $server, int $workerId): void
     {
-        // Initialize connection manager per worker per port
+        // Initialize TCP adapter per worker per port
         foreach ($this->ports as $port) {
-            $this->managers[$port] = new TcpConnectionManager(
-                cache: $this->initCache(),
-                dbPool: $this->initDbPool(),
-                computeApiUrl: $this->config['compute_api_url'] ?? 'http://appwrite-api/v1/compute',
-                computeApiKey: $this->config['compute_api_key'] ?? '',
-                coldStartTimeout: $this->config['cold_start_timeout'] ?? 30000,
-                healthCheckInterval: $this->config['health_check_interval'] ?? 100,
-                port: $port
-            );
+            // Use adapter from config, or create default
+            if (isset($this->config['adapter_factory'])) {
+                $this->adapters[$port] = $this->config['adapter_factory']($port);
+            } else {
+                $this->adapters[$port] = new TCPAdapter(port: $port);
+            }
         }
 
         echo "Worker #{$workerId} started\n";
@@ -134,16 +129,16 @@ class TcpServer
             $info = $server->getClientInfo($fd);
             $port = $info['server_port'] ?? 0;
 
-            $manager = $this->managers[$port] ?? null;
-            if (!$manager) {
-                throw new \Exception("No manager for port {$port}");
+            $adapter = $this->adapters[$port] ?? null;
+            if (!$adapter) {
+                throw new \Exception("No adapter for port {$port}");
             }
 
             // Parse database ID from initial packet (SNI or first query)
-            $databaseId = $manager->parseDatabaseId($data, $fd);
+            $databaseId = $adapter->parseDatabaseId($data, $fd);
 
             // Get or create backend connection
-            $backendFd = $manager->getBackendConnection($databaseId, $fd);
+            $backendFd = $adapter->getBackendConnection($databaseId, $fd);
 
             // Forward data to backend using zero-copy where possible
             $this->forwardToBackend($server, $fd, $backendFd, $data);
@@ -209,21 +204,6 @@ class TcpServer
         }
     }
 
-    protected function initCache(): \Utopia\Cache\Cache
-    {
-        $redis = new \Redis();
-        $redis->connect($this->config['redis_host'] ?? '127.0.0.1', $this->config['redis_port'] ?? 6379);
-
-        $adapter = new \Utopia\Cache\Adapter\Redis($redis);
-        return new \Utopia\Cache\Cache($adapter);
-    }
-
-    protected function initDbPool(): \Utopia\Pools\Group
-    {
-        // Connection pool implementation
-        return new \Utopia\Pools\Group();
-    }
-
     public function start(): void
     {
         $this->server->start();
@@ -231,16 +211,16 @@ class TcpServer
 
     public function getStats(): array
     {
-        $managerStats = [];
-        foreach ($this->managers as $port => $manager) {
-            $managerStats[$port] = $manager->getStats();
+        $adapterStats = [];
+        foreach ($this->adapters as $port => $adapter) {
+            $adapterStats[$port] = $adapter->getStats();
         }
 
         return [
             'connections' => $this->server->stats()['connection_num'] ?? 0,
             'workers' => $this->server->stats()['worker_num'] ?? 0,
             'coroutines' => Coroutine::stats()['coroutine_num'] ?? 0,
-            'managers' => $managerStats,
+            'adapters' => $adapterStats,
         ];
     }
 }

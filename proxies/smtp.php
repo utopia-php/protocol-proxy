@@ -2,32 +2,38 @@
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use Appwrite\ProtocolProxy\Tcp\TcpServer;
+use Utopia\Proxy\Smtp\SMTP;
 
 /**
- * TCP Proxy Server Example (PostgreSQL + MySQL)
+ * SMTP Proxy Server Example
  *
- * Performance: 100k+ conn/s, 10GB/s throughput
+ * Performance: 50k+ messages/sec
  *
  * Usage:
- *   php examples/tcp-proxy.php
+ *   php examples/smtp.php
  *
- * Test PostgreSQL:
- *   psql -h localhost -p 5432 -U postgres -d db-abc123
+ * Test:
+ *   telnet localhost 25
+ *   EHLO test.com
+ *   MAIL FROM:<sender@test.com>
+ *   RCPT TO:<recipient@test.com>
+ *   DATA
+ *   Subject: Test
  *
- * Test MySQL:
- *   mysql -h localhost -P 3306 -u root -D db-abc123
+ *   Hello World
+ *   .
+ *   QUIT
  */
 
 $config = [
     // Server settings
     'host' => '0.0.0.0',
+    'port' => 25,
     'workers' => swoole_cpu_num() * 2,
 
     // Performance tuning
-    'max_connections' => 100000,
-    'max_coroutine' => 100000,
-    'socket_buffer_size' => 8 * 1024 * 1024, // 8MB for database traffic
+    'max_connections' => 50000,
+    'max_coroutine' => 50000,
 
     // Cold-start settings
     'cold_start_timeout' => 30000,
@@ -49,18 +55,15 @@ $config = [
     'redis_port' => (int)(getenv('REDIS_PORT') ?: 6379),
 ];
 
-$ports = [5432, 3306]; // PostgreSQL, MySQL
-
-echo "Starting TCP Proxy Server...\n";
-echo "Host: {$config['host']}\n";
-echo "Ports: " . implode(', ', $ports) . "\n";
+echo "Starting SMTP Proxy Server...\n";
+echo "Host: {$config['host']}:{$config['port']}\n";
 echo "Workers: {$config['workers']}\n";
 echo "Max connections: {$config['max_connections']}\n";
 echo "\n";
 
-$server = new TcpServer(
+$server = new SMTP(
     host: $config['host'],
-    ports: $ports,
+    port: $config['port'],
     workers: $config['workers'],
     config: $config
 );

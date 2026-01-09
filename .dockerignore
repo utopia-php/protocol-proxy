@@ -1,0 +1,9 @@
+.git
+.gitignore
+.idea
+vendor
+composer.lock
+*.md
+.dockerignore
+Dockerfile
+docker-compose.yml

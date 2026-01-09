@@ -22,24 +22,47 @@ High-performance, protocol-agnostic proxy built on Swoole for blazing fast conne
 
 ## 📦 Installation
 
+### Using Composer
+
 ```bash
 composer require appwrite/protocol-proxy
 ```
 
+### Using Docker
+
+For a complete setup with all dependencies:
+
+```bash
+docker-compose up -d
+```
+
+See [DOCKER.md](DOCKER.md) for detailed Docker setup and configuration.
+
 ## 🏃 Quick Start
 
-### HTTP Proxy
+The protocol-proxy uses the **Adapter Pattern** - similar to [utopia-php/database](https://github.com/utopia-php/database), [utopia-php/messaging](https://github.com/utopia-php/messaging), and [utopia-php/storage](https://github.com/utopia-php/storage).
+
+### HTTP Proxy (Basic)
 
 ```php
 <?php
 require 'vendor/autoload.php';
 
-use Appwrite\ProtocolProxy\Http\HttpServer;
+use Utopia\Proxy\Adapter\HTTP;
+
+$adapter = new HTTP($cache, $dbPool);
+
+// Required: Provide backend resolution logic
+$adapter->hook('resolve', function (string $hostname) {
+    // Your resolution logic here (database, K8s, config, etc.)
+    return $backend->getEndpoint($hostname);
+});
 
 $server = new HttpServer(
     host: '0.0.0.0',
     port: 80,
-    workers: swoole_cpu_num() * 2
+    workers: swoole_cpu_num() * 2,
+    config: ['adapter' => $adapter]
 );
 
 $server->start();
@@ -51,7 +74,7 @@ $server->start();
 <?php
 require 'vendor/autoload.php';
 
-use Appwrite\ProtocolProxy\Tcp\TcpServer;
+use Utopia\Proxy\Tcp\TcpServer;
 
 $server = new TcpServer(
     host: '0.0.0.0',
@@ -68,7 +91,7 @@ $server->start();
 <?php
 require 'vendor/autoload.php';
 
-use Appwrite\ProtocolProxy\Smtp\SmtpServer;
+use Utopia\Proxy\Smtp\SmtpServer;
 
 $server = new SmtpServer(
     host: '0.0.0.0',
@@ -94,29 +117,25 @@ $config = [
     'socket_buffer_size' => 2 * 1024 * 1024, // 2MB
     'buffer_output_size' => 2 * 1024 * 1024, // 2MB
 
-    // Cold-start settings
-    'cold_start_timeout' => 30000, // 30 seconds
-    'health_check_interval' => 100, // 100ms
-
-    // Cache settings
+    // Routing cache
     'cache_ttl' => 1, // 1 second
-    'cache_adapter' => 'redis',
 
-    // Database connection
-    'db_adapter' => 'mysql',
+    // Database connection (for cache and resolution hooks)
     'db_host' => 'localhost',
     'db_port' => 3306,
     'db_user' => 'appwrite',
     'db_pass' => 'password',
     'db_name' => 'appwrite',
 
-    // Compute API
-    'compute_api_url' => 'http://appwrite-api/v1/compute',
-    'compute_api_key' => 'api-key-here',
+    // Redis cache
+    'redis_host' => '127.0.0.1',
+    'redis_port' => 6379,
 ];
 ```
 
 ## 🎨 Architecture
+
+The protocol-proxy follows the **Adapter Pattern** used throughout utopia-php libraries (Database, Messaging, Storage), providing a clean and extensible architecture for protocol-specific implementations.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -130,8 +149,17 @@ $config = [
 │       │                 │                  │                     │
 │       └─────────────────┴──────────────────┘                     │
 │                         │                                        │
+│           ┌─────────────┼─────────────┐                          │
+│           │             │             │                          │
+│      ┌────▼────┐   ┌────▼────┐  ┌────▼────┐                    │
+│      │   HTTP  │   │   TCP   │  │   SMTP  │                    │
+│      │ Adapter │   │ Adapter │  │ Adapter │                    │
+│      └────┬────┘   └────┬────┘  └────┬────┘                    │
+│           │             │             │                          │
+│           └─────────────┴─────────────┘                          │
+│                         │                                        │
 │                ┌────────▼────────┐                               │
-│                │  ConnectionMgr  │                               │
+│                │     Adapter     │                               │
 │                │   (Abstract)    │                               │
 │                └────────┬────────┘                               │
 │                         │                                        │
@@ -144,6 +172,26 @@ $config = [
 │                                                                   │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+### Adapter Pattern
+
+Following the design principles of utopia-php libraries:
+
+- **Abstract Base**: `Adapter` class defines core proxy behavior
+  - Connection handling and routing
+  - Cold-start detection and triggering
+  - Caching and performance optimization
+
+- **Protocol-Specific Adapters**:
+  - `HTTP` - Routes HTTP requests based on hostname
+  - `TCP` - Routes TCP connections (PostgreSQL/MySQL) based on SNI
+  - `SMTP` - Routes SMTP connections based on email domain
+
+This pattern enables:
+- Easy addition of new protocols
+- Protocol-specific optimizations
+- Consistent interface across all proxy types
+- Shared infrastructure (caching, pooling, metrics)
 
 ## 📊 Performance Benchmarks
 

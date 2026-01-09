@@ -1,22 +1,19 @@
 <?php
 
-namespace Appwrite\ProtocolProxy\Http;
+namespace Utopia\Proxy\Server\HTTP;
 
-use Appwrite\ProtocolProxy\ConnectionManager;
-use Swoole\Coroutine;
+use Utopia\Proxy\Adapter\HTTP\Swoole as HTTPAdapter;
 use Swoole\Http\Server;
 use Swoole\Http\Request;
 use Swoole\Http\Response;
 
 /**
- * High-performance HTTP proxy server
- *
- * Performance: 250k+ requests/sec, <1ms p50 latency
+ * High-performance HTTP proxy server (Swoole Implementation)
  */
-class HttpServer
+class Swoole
 {
     protected Server $server;
-    protected HttpConnectionManager $manager;
+    protected HTTPAdapter $adapter;
     protected array $config;
 
     public function __construct(
@@ -76,17 +73,14 @@ class HttpServer
 
     public function onWorkerStart(Server $server, int $workerId): void
     {
-        // Initialize connection manager per worker
-        $this->manager = new HttpConnectionManager(
-            cache: $this->initCache(),
-            dbPool: $this->initDbPool(),
-            computeApiUrl: $this->config['compute_api_url'] ?? 'http://appwrite-api/v1/compute',
-            computeApiKey: $this->config['compute_api_key'] ?? '',
-            coldStartTimeout: $this->config['cold_start_timeout'] ?? 30000,
-            healthCheckInterval: $this->config['health_check_interval'] ?? 100
-        );
+        // Use adapter from config, or create default
+        if (isset($this->config['adapter'])) {
+            $this->adapter = $this->config['adapter'];
+        } else {
+            $this->adapter = new HTTPAdapter();
+        }
 
-        echo "Worker #{$workerId} started\n";
+        echo "Worker #{$workerId} started (Adapter: {$this->adapter->getName()})\n";
     }
 
     /**
@@ -108,8 +102,8 @@ class HttpServer
                 return;
             }
 
-            // Handle connection routing
-            $result = $this->manager->handleConnection($hostname);
+            // Route to backend using adapter
+            $result = $this->adapter->route($hostname);
 
             // Forward request to backend (zero-copy where possible)
             $this->forwardRequest($request, $response, $result->endpoint);
@@ -197,21 +191,6 @@ class HttpServer
         $client->close();
     }
 
-    protected function initCache(): \Utopia\Cache\Cache
-    {
-        $adapter = new \Utopia\Cache\Adapter\Redis(
-            new \Redis()
-        );
-
-        return new \Utopia\Cache\Cache($adapter);
-    }
-
-    protected function initDbPool(): \Utopia\Pools\Group
-    {
-        // Connection pool implementation
-        return new \Utopia\Pools\Group();
-    }
-
     public function start(): void
     {
         $this->server->start();
@@ -223,7 +202,7 @@ class HttpServer
             'connections' => $this->server->stats()['connection_num'] ?? 0,
             'requests' => $this->server->stats()['request_count'] ?? 0,
             'workers' => $this->server->stats()['worker_num'] ?? 0,
-            'manager' => $this->manager?->getStats() ?? [],
+            'adapter' => $this->adapter?->getStats() ?? [],
         ];
     }
 }
