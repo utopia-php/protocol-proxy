@@ -1,14 +1,68 @@
-# Hook System
+# Action System
 
-The protocol-proxy provides a flexible hook system that allows applications to inject custom business logic into the routing lifecycle.
+The protocol-proxy uses Utopia Platform actions to inject custom business logic into the routing lifecycle.
 
-**Key Design**: The proxy doesn't enforce how backends are resolved. Applications provide their own resolution logic via the `resolve` hook.
+**Key Design**: The proxy doesn't enforce how backends are resolved. Applications provide their own resolution logic via a `resolve` action.
 
-## Available Hooks
+## Action Registration
+
+Each adapter initializes a protocol-specific service by default. Use it directly or replace it with your own.
+
+```php
+use Utopia\Platform\Action;
+use Utopia\Proxy\Adapter\HTTP\Swoole as HTTPAdapter;
+use Utopia\Proxy\Service\HTTP as HTTPService;
+
+$adapter = new HTTPAdapter();
+$service = $adapter->getService() ?? new HTTPService();
+
+// Required: resolve backend endpoint
+$service->addAction('resolve', (new class extends Action {})
+    ->callback(function (string $hostname): string {
+        return "runtime-{$hostname}.runtimes.svc.cluster.local:8080";
+    }));
+
+// Optional: beforeRoute actions (TYPE_INIT)
+$service->addAction('validateHost', (new class extends Action {})
+    ->setType(Action::TYPE_INIT)
+    ->callback(function (string $hostname) {
+        if (!preg_match('/^[a-z0-9-]+\.myapp\.com$/', $hostname)) {
+            throw new \Exception("Invalid hostname: {$hostname}");
+        }
+    }));
+
+// Optional: afterRoute actions (TYPE_SHUTDOWN)
+$service->addAction('logRoute', (new class extends Action {})
+    ->setType(Action::TYPE_SHUTDOWN)
+    ->callback(function (string $hostname, string $endpoint, $result) {
+        error_log("Routed {$hostname} -> {$endpoint}");
+    }));
+
+// Optional: onRoutingError actions (TYPE_ERROR)
+$service->addAction('logError', (new class extends Action {})
+    ->setType(Action::TYPE_ERROR)
+    ->callback(function (string $hostname, \Exception $e) {
+        error_log("Routing error for {$hostname}: {$e->getMessage()}");
+    }));
+
+$adapter->setService($service);
+```
+
+Actions execute in the order they were added to the service.
+
+## Protocol Services
+
+Use the protocol-specific service classes to keep configuration aligned with each adapter:
+
+- `Utopia\Proxy\Service\HTTP`
+- `Utopia\Proxy\Service\TCP`
+- `Utopia\Proxy\Service\SMTP`
+
+## Action Types and Parameters
 
 ### 1. `resolve` (Required)
 
-Called to **resolve the backend endpoint** for a resource identifier.
+Action key: `resolve` (type is `Action::TYPE_DEFAULT` by default)
 
 **Parameters:**
 - `string $resourceId` - The identifier to resolve (hostname, domain, etc.)
@@ -24,41 +78,9 @@ Called to **resolve the backend endpoint** for a resource identifier.
 - Kubernetes service resolution
 - DNS resolution
 
-**Example:**
-```php
-// Option 1: Static configuration
-$adapter->hook('resolve', function (string $hostname) {
-    $mapping = [
-        'func-123.app.network' => '10.0.1.5:8080',
-        'func-456.app.network' => '10.0.1.6:8080',
-    ];
-    return $mapping[$hostname] ?? throw new \Exception("Not found");
-});
+### 2. `beforeRoute` (TYPE_INIT)
 
-// Option 2: Database lookup (like Appwrite Edge)
-$adapter->hook('resolve', function (string $hostname) use ($db) {
-    $doc = $db->findOne('functions', [
-        Query::equal('hostname', [$hostname])
-    ]);
-    return $doc->getAttribute('endpoint');
-});
-
-// Option 3: Service discovery
-$adapter->hook('resolve', function (string $hostname) use ($consul) {
-    return $consul->resolveService($hostname);
-});
-
-// Option 4: Kubernetes service
-$adapter->hook('resolve', function (string $hostname) {
-    return "function-{$hostname}.default.svc.cluster.local:8080";
-});
-```
-
-**Important:** Only one `resolve` hook can be registered. If you try to register multiple, an exception will be thrown.
-
-### 2. `beforeRoute`
-
-Called **before** any routing logic executes.
+Run actions with `Action::TYPE_INIT` **before** routing.
 
 **Parameters:**
 - `string $resourceId` - The identifier being routed (hostname, domain, etc.)
@@ -70,24 +92,9 @@ Called **before** any routing logic executes.
 - Custom caching lookups
 - Request transformation
 
-**Example:**
-```php
-$adapter->hook('beforeRoute', function (string $hostname) {
-    // Validate hostname format
-    if (!preg_match('/^[a-z0-9-]+\.myapp\.com$/', $hostname)) {
-        throw new \Exception("Invalid hostname: {$hostname}");
-    }
+### 3. `afterRoute` (TYPE_SHUTDOWN)
 
-    // Check rate limits
-    if (isRateLimited($hostname)) {
-        throw new \Exception("Rate limit exceeded");
-    }
-});
-```
-
-### 2. `afterRoute`
-
-Called **after** successful routing.
+Run actions with `Action::TYPE_SHUTDOWN` **after** successful routing.
 
 **Parameters:**
 - `string $resourceId` - The identifier that was routed
@@ -101,28 +108,9 @@ Called **after** successful routing.
 - Cache warming
 - Audit trails
 
-**Example:**
-```php
-$adapter->hook('afterRoute', function (string $hostname, string $endpoint, $result) {
-    // Log to telemetry
-    $telemetry->record([
-        'hostname' => $hostname,
-        'endpoint' => $endpoint,
-        'cached' => $result->metadata['cached'],
-        'latency_ms' => $result->metadata['latency_ms'],
-    ]);
+### 4. `onRoutingError` (TYPE_ERROR)
 
-    // Update metrics
-    $metrics->increment('proxy.routes.success');
-    if ($result->metadata['cached']) {
-        $metrics->increment('proxy.cache.hits');
-    }
-});
-```
-
-### 3. `onRoutingError`
-
-Called when routing **fails** with an exception.
+Run actions with `Action::TYPE_ERROR` when routing fails.
 
 **Parameters:**
 - `string $resourceId` - The identifier that failed to route
@@ -135,116 +123,83 @@ Called when routing **fails** with an exception.
 - Circuit breaker logic
 - Alerting
 
-**Example:**
-```php
-$adapter->hook('onRoutingError', function (string $hostname, \Exception $e) {
-    // Log to Sentry
-    Sentry\captureException($e, [
-        'tags' => ['hostname' => $hostname],
-        'level' => 'error',
-    ]);
-
-    // Try fallback region
-    if ($e->getMessage() === 'Function not found') {
-        tryFallbackRegion($hostname);
-    }
-
-    // Update error metrics
-    $metrics->increment('proxy.routes.errors');
-});
-```
-
-## Registering Multiple Hooks
-
-You can register multiple callbacks for the same hook:
-
-```php
-// Hook 1: Validation
-$adapter->hook('beforeRoute', function ($hostname) {
-    validateHostname($hostname);
-});
-
-// Hook 2: Rate limiting
-$adapter->hook('beforeRoute', function ($hostname) {
-    checkRateLimit($hostname);
-});
-
-// Hook 3: Authentication
-$adapter->hook('beforeRoute', function ($hostname) {
-    validateJWT();
-});
-```
-
-All registered hooks will execute in the order they were registered.
-
 ## Integration with Appwrite Edge
 
-The protocol-proxy can replace the current edge HTTP proxy by using hooks to inject edge-specific logic:
+The protocol-proxy can replace the current edge HTTP proxy by using actions to inject edge-specific logic:
 
 ```php
-use Utopia\Proxy\Adapter\HTTP;
+use Utopia\Platform\Action;
+use Utopia\Proxy\Adapter\HTTP\Swoole as HTTPAdapter;
+use Utopia\Proxy\Service\HTTP as HTTPService;
 
-$adapter = new HTTP($cache, $dbPool);
+$adapter = new HTTPAdapter();
+$service = $adapter->getService() ?? new HTTPService();
 
-// Hook 1: Resolve backend using K8s runtime registry (REQUIRED)
-$adapter->hook('resolve', function (string $hostname) use ($runtimeRegistry) {
-    // Edge resolves hostnames to K8s service endpoints
-    $runtime = $runtimeRegistry->get($hostname);
-    if (!$runtime) {
-        throw new \Exception("Runtime not found: {$hostname}");
-    }
+// Resolve backend using K8s runtime registry (REQUIRED)
+$service->addAction('resolve', (new class extends Action {})
+    ->callback(function (string $hostname) use ($runtimeRegistry): string {
+        $runtime = $runtimeRegistry->get($hostname);
+        if (!$runtime) {
+            throw new \Exception("Runtime not found: {$hostname}");
+        }
+        return "{$runtime['projectId']}-{$runtime['deploymentId']}.runtimes.svc.cluster.local:8080";
+    }));
 
-    // Return K8s service endpoint
-    return "{$runtime['projectId']}-{$runtime['deploymentId']}.runtimes.svc.cluster.local:8080";
-});
+// Rule resolution and caching
+$service->addAction('resolveRule', (new class extends Action {})
+    ->setType(Action::TYPE_INIT)
+    ->callback(function (string $hostname) use ($ruleCache, $sdkForManager) {
+        $rule = $ruleCache->load($hostname);
+        if (!$rule) {
+            $rule = $sdkForManager->getRule($hostname);
+            $ruleCache->save($hostname, $rule);
+        }
+        Context::set('rule', $rule);
+    }));
 
-// Hook 2: Rule resolution and caching
-$adapter->hook('beforeRoute', function (string $hostname) use ($ruleCache, $sdkForManager) {
-    $rule = $ruleCache->load($hostname);
-    if (!$rule) {
-        $rule = $sdkForManager->getRule($hostname);
-        $ruleCache->save($hostname, $rule);
-    }
-    Context::set('rule', $rule);
-});
+// Telemetry and metrics
+$service->addAction('telemetry', (new class extends Action {})
+    ->setType(Action::TYPE_SHUTDOWN)
+    ->callback(function (string $hostname, string $endpoint, $result) use ($telemetry) {
+        $telemetry->record([
+            'hostname' => $hostname,
+            'endpoint' => $endpoint,
+            'cached' => $result->metadata['cached'],
+            'latency_ms' => $result->metadata['latency_ms'],
+        ]);
+    }));
 
-// Hook 3: Telemetry and metrics
-$adapter->hook('afterRoute', function (string $hostname, string $endpoint, $result) use ($telemetry) {
-    $telemetry->record([
-        'hostname' => $hostname,
-        'endpoint' => $endpoint,
-        'cached' => $result->metadata['cached'],
-        'latency_ms' => $result->metadata['latency_ms'],
-    ]);
-});
+// Error logging
+$service->addAction('routeError', (new class extends Action {})
+    ->setType(Action::TYPE_ERROR)
+    ->callback(function (string $hostname, \Exception $e) use ($logger) {
+        $logger->addLog([
+            'type' => 'error',
+            'hostname' => $hostname,
+            'message' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+    }));
 
-// Hook 4: Error logging
-$adapter->hook('onRoutingError', function (string $hostname, \Exception $e) use ($logger) {
-    $logger->addLog([
-        'type' => 'error',
-        'hostname' => $hostname,
-        'message' => $e->getMessage(),
-        'trace' => $e->getTraceAsString(),
-    ]);
-});
+$adapter->setService($service);
 ```
 
 ## Performance Considerations
 
-- **Hooks are synchronous** - They execute inline during routing
-- **Keep hooks fast** - Slow hooks will impact overall proxy performance
+- **Actions are synchronous** - They execute inline during routing
+- **Keep actions fast** - Slow actions will impact overall proxy performance
 - **Use async operations** - For non-critical work (logging, metrics), consider using Swoole coroutines or queues
-- **Avoid heavy I/O** - Database queries and API calls in hooks should be cached or batched
+- **Avoid heavy I/O** - Database queries and API calls in actions should be cached or batched
 
 ## Best Practices
 
-1. **Fail fast** - Throw exceptions early in `beforeRoute` to avoid unnecessary work
-2. **Keep it simple** - Each hook should do one thing well
-3. **Handle errors** - Wrap hook logic in try/catch to prevent cascading failures
-4. **Document hooks** - Clearly document what each hook does and why
-5. **Test hooks** - Write unit tests for hook callbacks
-6. **Monitor performance** - Track hook execution time to identify bottlenecks
+1. **Fail fast** - Throw exceptions early in init actions to avoid unnecessary work
+2. **Keep it simple** - Each action should do one thing well
+3. **Handle errors** - Wrap action logic in try/catch to prevent cascading failures
+4. **Document actions** - Clearly document what each action does and why
+5. **Test actions** - Write unit tests for action callbacks
+6. **Monitor performance** - Track action execution time to identify bottlenecks
 
 ## Example: Complete Edge Integration
 
-See `examples/http-edge-integration.php` for a complete example of how Appwrite Edge can integrate with the protocol-proxy using hooks.
+See `examples/http-edge-integration.php` for a complete example of how Appwrite Edge can integrate with the protocol-proxy using actions.

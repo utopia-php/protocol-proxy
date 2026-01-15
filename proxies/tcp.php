@@ -5,6 +5,7 @@ require __DIR__ . '/../vendor/autoload.php';
 use Utopia\Platform\Action;
 use Utopia\Proxy\Adapter\TCP\Swoole as TCPAdapter;
 use Utopia\Proxy\Server\TCP\Swoole as TCPServer;
+use Utopia\Proxy\Server\TCP\SwooleCoroutine as TCPCoroutineServer;
 use Utopia\Proxy\Service\TCP as TCPService;
 
 /**
@@ -22,10 +23,27 @@ use Utopia\Proxy\Service\TCP as TCPService;
  *   mysql -h localhost -P 3306 -u root -D db-abc123
  */
 
+$serverImpl = strtolower(getenv('TCP_SERVER_IMPL') ?: 'swoole');
+if (!in_array($serverImpl, ['swoole', 'coroutine', 'coro'], true)) {
+    $serverImpl = 'swoole';
+}
+if ($serverImpl === 'coro') {
+    $serverImpl = 'coroutine';
+}
+
+$envInt = static function (string $key, int $default): int {
+    $value = getenv($key);
+    return $value === false ? $default : (int)$value;
+};
+
+$workers = $envInt('TCP_WORKERS', swoole_cpu_num() * 2);
+$reactorNum = $envInt('TCP_REACTOR_NUM', swoole_cpu_num() * 2);
+$dispatchMode = $envInt('TCP_DISPATCH_MODE', 2);
+
 $config = [
     // Server settings
     'host' => '0.0.0.0',
-    'workers' => swoole_cpu_num() * 2,
+    'workers' => $workers,
 
     // Performance tuning
     'max_connections' => 200_000,
@@ -33,8 +51,8 @@ $config = [
     'socket_buffer_size' => 16 * 1024 * 1024, // 16MB for database traffic
     'buffer_output_size' => 16 * 1024 * 1024, // 16MB
     'log_level' => SWOOLE_LOG_ERROR,
-    'reactor_num' => swoole_cpu_num() * 2,
-    'dispatch_mode' => 2,
+    'reactor_num' => $reactorNum,
+    'dispatch_mode' => $dispatchMode,
     'enable_reuse_port' => true,
     'backlog' => 65535,
     'package_max_length' => 32 * 1024 * 1024, // 32MB max query/result
@@ -62,8 +80,8 @@ $config = [
     'redis_port' => (int)(getenv('REDIS_PORT') ?: 6379),
 ];
 
-$postgresPort = (int)(getenv('TCP_POSTGRES_PORT') ?: 5432);
-$mysqlPort = (int)(getenv('TCP_MYSQL_PORT') ?: 3306);
+$postgresPort = $envInt('TCP_POSTGRES_PORT', 5432);
+$mysqlPort = $envInt('TCP_MYSQL_PORT', 3306);
 $ports = array_values(array_filter([$postgresPort, $mysqlPort], static fn (int $port): bool => $port > 0)); // PostgreSQL, MySQL
 if ($ports === []) {
     $ports = [5432, 3306];
@@ -74,11 +92,14 @@ echo "Host: {$config['host']}\n";
 echo "Ports: " . implode(', ', $ports) . "\n";
 echo "Workers: {$config['workers']}\n";
 echo "Max connections: {$config['max_connections']}\n";
+echo "Server impl: {$serverImpl}\n";
 echo "\n";
 
 $backendEndpoint = getenv('TCP_BACKEND_ENDPOINT') ?: 'tcp-backend:15432';
 
-$adapterFactory = function (int $port) use ($backendEndpoint): TCPAdapter {
+$skipValidation = filter_var(getenv('TCP_SKIP_VALIDATION') ?: 'false', FILTER_VALIDATE_BOOLEAN);
+
+$adapterFactory = function (int $port) use ($backendEndpoint, $skipValidation): TCPAdapter {
     $adapter = new TCPAdapter(port: $port);
     $service = $adapter->getService() ?? new TCPService();
 
@@ -89,10 +110,16 @@ $adapterFactory = function (int $port) use ($backendEndpoint): TCPAdapter {
 
     $adapter->setService($service);
 
+    // Skip SSRF validation for trusted backends (e.g., benchmarks)
+    if ($skipValidation) {
+        $adapter->setSkipValidation(true);
+    }
+
     return $adapter;
 };
 
-$server = new TCPServer(
+$serverClass = $serverImpl === 'swoole' ? TCPServer::class : TCPCoroutineServer::class;
+$server = new $serverClass(
     host: $config['host'],
     ports: $ports,
     workers: $config['workers'],

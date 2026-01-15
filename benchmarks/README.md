@@ -19,11 +19,21 @@ Run wrk2 (fixed rate):
 benchmarks/wrk2.sh
 ```
 
+Compare Swoole HTTP servers (evented vs coroutine):
+```bash
+benchmarks/compare-http-servers.sh
+```
+
 ## Quick start (TCP)
 
 Run the TCP benchmark:
 ```bash
 php benchmarks/tcp.php
+```
+
+Compare Swoole TCP servers (evented vs coroutine):
+```bash
+benchmarks/compare-tcp-servers.sh
 ```
 
 ## Presets (HTTP)
@@ -78,6 +88,10 @@ TCP PHP benchmark (`benchmarks/tcp.php`):
 - `BENCH_TIMEOUT` (default `10`)
 - `BENCH_SAMPLE_TARGET` (default `200000`)
 - `BENCH_SAMPLE_EVERY` (optional override)
+- `BENCH_PERSISTENT` (default `false`)
+- `BENCH_STREAM_BYTES` (default `0`, uses `BENCH_TARGET_BYTES` when persistent)
+- `BENCH_STREAM_DURATION` (default `0`)
+- `BENCH_ECHO_NEWLINE` (default `false`)
 
 wrk (`benchmarks/wrk.sh`):
 - `WRK_THREADS` (default `cpu`)
@@ -93,6 +107,53 @@ wrk2 (`benchmarks/wrk2.sh`):
 - `WRK2_RATE` (default `50000`)
 - `WRK2_URL` (default `http://127.0.0.1:8080/`)
 - `WRK2_EXTRA` (extra flags)
+
+Swoole HTTP compare (`benchmarks/compare-http-servers.sh`):
+- `COMPARE_HOST` (default `127.0.0.1`)
+- `COMPARE_PORT` (default `8080`)
+- `COMPARE_CONCURRENCY` (default `1000`)
+- `COMPARE_REQUESTS` (default `100000`)
+- `COMPARE_SAMPLE_EVERY` (default `5`)
+- `COMPARE_RUNS` (default `1`)
+- `COMPARE_BENCH_KEEP_ALIVE` (default `true`)
+- `COMPARE_BENCH_TIMEOUT` (default `10`)
+- `COMPARE_BACKEND_HOST` (default `127.0.0.1`)
+- `COMPARE_BACKEND_PORT` (default `5678`)
+- `COMPARE_BACKEND_WORKERS` (optional)
+- `COMPARE_WORKERS` (default `8`)
+- `COMPARE_DISPATCH_MODE` (default `3`)
+- `COMPARE_REACTOR_NUM` (default `16`)
+- `COMPARE_BACKEND_POOL_SIZE` (default `2048`)
+- `COMPARE_KEEPALIVE_TIMEOUT` (default `10`)
+- `COMPARE_OPEN_HTTP2` (default `false`)
+- `COMPARE_FAST_ASSUME_OK` (default `true`)
+- `COMPARE_SERVER_MODE` (default `base`)
+
+Swoole TCP compare (`benchmarks/compare-tcp-servers.sh`):
+- `COMPARE_HOST` (default `127.0.0.1`)
+- `COMPARE_PORT` (default `15433`)
+- `COMPARE_PROTOCOL` (default `mysql`)
+- `COMPARE_CONCURRENCY` (default `2000`)
+- `COMPARE_CONNECTIONS` (default `100000`)
+- `COMPARE_PAYLOAD_BYTES` (default `0`)
+- `COMPARE_TARGET_BYTES` (default `0`)
+- `COMPARE_PERSISTENT` (default `false`)
+- `COMPARE_STREAM_BYTES` (default `0`)
+- `COMPARE_STREAM_DURATION` (default `0`)
+- `COMPARE_ECHO_NEWLINE` (default `false`)
+- `COMPARE_TIMEOUT` (default `10`)
+- `COMPARE_SAMPLE_EVERY` (default `5`)
+- `COMPARE_RUNS` (default `1`)
+- `COMPARE_MODE` (`single` or `match`, default `single`)
+- `COMPARE_CORO_PROCESSES` (optional override)
+- `COMPARE_CORO_REACTOR_NUM` (optional override)
+- `COMPARE_BACKEND_HOST` (default `127.0.0.1`)
+- `COMPARE_BACKEND_PORT` (default `15432`)
+- `COMPARE_BACKEND_WORKERS` (optional)
+- `COMPARE_BACKEND_START` (default `true`)
+- `COMPARE_WORKERS` (default `8`)
+- `COMPARE_REACTOR_NUM` (default `16`)
+- `COMPARE_DISPATCH_MODE` (default `2`)
 
 ## Notes
 

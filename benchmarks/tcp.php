@@ -30,6 +30,14 @@ Co\run(function () {
         $value = getenv($key);
         return $value === false ? $default : (float)$value;
     };
+    $envBool = static function (string $key, bool $default): bool {
+        $value = getenv($key);
+        if ($value === false) {
+            return $default;
+        }
+        $parsed = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        return $parsed ?? $default;
+    };
 
     $host = getenv('BENCH_HOST') ?: 'localhost';
     $port = $envInt('BENCH_PORT', 5432); // PostgreSQL
@@ -38,9 +46,18 @@ Co\run(function () {
     $concurrent = $envInt('BENCH_CONCURRENCY', max(2000, $cpu * 500));
     $payloadBytes = $envInt('BENCH_PAYLOAD_BYTES', 65536);
     $targetBytes = $envInt('BENCH_TARGET_BYTES', 8 * 1024 * 1024 * 1024);
+    $persistent = $envBool('BENCH_PERSISTENT', false);
+    $echoNewline = $envBool('BENCH_ECHO_NEWLINE', false);
+    $streamBytes = $envInt('BENCH_STREAM_BYTES', 0);
+    $streamDuration = $envFloat('BENCH_STREAM_DURATION', 0);
     $timeout = $envFloat('BENCH_TIMEOUT', 10);
     $connectionsEnv = getenv('BENCH_CONNECTIONS');
-    if ($connectionsEnv === false) {
+    if ($persistent) {
+        $connections = $concurrent;
+        if ($streamBytes <= 0 && $streamDuration <= 0) {
+            $streamBytes = $targetBytes;
+        }
+    } elseif ($connectionsEnv === false) {
         $connections = max(300000, $concurrent * 100);
         if ($payloadBytes > 0) {
             $connections = max(100000, $concurrent * 20);
@@ -84,13 +101,223 @@ Co\run(function () {
     $chunkSize = 65536;
     $payloadChunk = '';
     $payloadRemainder = '';
+    $payloadSuffix = '';
+    $payloadDataBytes = $payloadBytes;
+    if ($echoNewline && $payloadBytes > 0) {
+        $payloadDataBytes = $payloadBytes - 1;
+        $payloadSuffix = "\n";
+    }
     if ($payloadBytes > 0) {
-        $chunkSize = min($chunkSize, $payloadBytes);
-        $payloadChunk = str_repeat('a', $chunkSize);
-        $remainderBytes = $payloadBytes % $chunkSize;
+        $chunkSize = min($chunkSize, max(1, $payloadDataBytes));
+        $payloadChunk = $payloadDataBytes > 0 ? str_repeat('a', $chunkSize) : '';
+        $remainderBytes = $payloadDataBytes % $chunkSize;
         if ($remainderBytes > 0) {
             $payloadRemainder = str_repeat('a', $remainderBytes);
         }
+    }
+
+    $handshake = '';
+    if ($protocol === 'mysql') {
+        // Minimal COM_INIT_DB packet; adapter only checks command byte + db name.
+        $handshake = "\x00\x00\x00\x00\x02db-abc123";
+    } else {
+        // PostgreSQL startup message
+        $handshake = pack('N', 196608); // Protocol version 3.0
+        $handshake .= "user\0postgres\0database\0db-abc123\0\0";
+    }
+    if ($echoNewline && $protocol === 'mysql') {
+        $handshake .= "\n";
+    }
+
+    if ($persistent) {
+                if ($payloadBytes <= 0) {
+                    echo "Persistent mode requires BENCH_PAYLOAD_BYTES > 0.\n";
+                    return;
+                }
+
+        echo "Mode: persistent\n";
+        if ($streamBytes > 0) {
+            echo "  Stream bytes: {$streamBytes}\n";
+        }
+        if ($streamDuration > 0) {
+            echo "  Stream duration: {$streamDuration}s\n";
+        }
+        echo "\n";
+
+        $remainingBytes = null;
+        if ($streamBytes > 0) {
+            if (class_exists('Swoole\\Atomic\\Long')) {
+                $remainingBytes = new \Swoole\Atomic\Long($streamBytes);
+            } else {
+                $remainingBytes = new \Swoole\Atomic($streamBytes);
+            }
+        }
+        $deadline = $streamDuration > 0 ? (microtime(true) + $streamDuration) : null;
+
+        $startTime = microtime(true);
+        $errors = 0;
+        $channel = new Coroutine\Channel($concurrent);
+
+        for ($i = 0; $i < $concurrent; $i++) {
+            Coroutine::create(function () use (
+                $host,
+                $port,
+                $protocol,
+                $timeout,
+                $payloadBytes,
+                $payloadDataBytes,
+                $payloadChunk,
+                $payloadRemainder,
+                $payloadSuffix,
+                $handshake,
+                $remainingBytes,
+                $deadline,
+                $channel
+            ) {
+                $bytes = 0;
+                $ops = 0;
+                $errors = 0;
+
+                $client = new Client(SWOOLE_SOCK_TCP);
+                $client->set(['timeout' => $timeout]);
+
+                if (!$client->connect($host, $port, $timeout)) {
+                    $errors++;
+                    $channel->push([
+                        'bytes' => 0,
+                        'ops' => 0,
+                        'errors' => $errors,
+                    ]);
+                    return;
+                }
+
+                if ($client->send($handshake) === false) {
+                    $errors++;
+                    $client->close();
+                    $channel->push([
+                        'bytes' => 0,
+                        'ops' => 0,
+                        'errors' => $errors,
+                    ]);
+                    return;
+                }
+
+                $handshakeResponse = $client->recv(8192);
+                if ($handshakeResponse === '' || $handshakeResponse === false) {
+                    $errors++;
+                    $client->close();
+                    $channel->push([
+                        'bytes' => 0,
+                        'ops' => 0,
+                        'errors' => $errors,
+                    ]);
+                    return;
+                }
+
+                while (true) {
+                    if ($deadline !== null && microtime(true) >= $deadline) {
+                        break;
+                    }
+
+                    $chunkBytes = $payloadBytes;
+                    $payload = $payloadChunk;
+                    $payloadTail = $payloadSuffix;
+
+                    if ($remainingBytes !== null) {
+                        $remaining = $remainingBytes->get();
+                        if ($remaining <= 0) {
+                            break;
+                        }
+                        $chunkBytes = min($payloadBytes, $remaining);
+                        $remainingBytes->sub($chunkBytes);
+                        if ($chunkBytes !== $payloadBytes) {
+                            $payloadTail = '';
+                            $payload = $chunkBytes > 0 ? substr($payloadChunk, 0, $chunkBytes) : '';
+                        }
+                    }
+
+                    if ($chunkBytes <= 0) {
+                        break;
+                    }
+
+                    $remainingSend = $payloadDataBytes > 0 ? min($payloadDataBytes, $chunkBytes) : 0;
+                    $remainingData = $remainingSend;
+                    while ($remainingData > 0) {
+                        if ($remainingData > strlen($payloadChunk)) {
+                            if ($client->send($payloadChunk) === false) {
+                                $errors++;
+                                break 2;
+                            }
+                            $remainingData -= strlen($payloadChunk);
+                        } else {
+                            $chunk = $payloadRemainder !== '' ? $payloadRemainder : substr($payloadChunk, 0, $remainingData);
+                            if ($client->send($chunk) === false) {
+                                $errors++;
+                                break 2;
+                            }
+                            $remainingData = 0;
+                        }
+                    }
+                    if ($payloadTail !== '') {
+                        if ($client->send($payloadTail) === false) {
+                            $errors++;
+                            break;
+                        }
+                    }
+
+                    $received = 0;
+                    while ($received < $chunkBytes) {
+                        $chunk = $client->recv(min(65536, $chunkBytes - $received));
+                        if ($chunk === '' || $chunk === false) {
+                            $errors++;
+                            break 2;
+                        }
+                        $received += strlen($chunk);
+                    }
+
+                    $bytes += $chunkBytes;
+                    $ops++;
+                }
+
+                $client->close();
+
+                $channel->push([
+                    'bytes' => $bytes,
+                    'ops' => $ops,
+                    'errors' => $errors,
+                ]);
+            });
+        }
+
+        $totalBytes = 0;
+        $totalOps = 0;
+
+        for ($i = 0; $i < $concurrent; $i++) {
+            $result = $channel->pop();
+            $totalBytes += $result['bytes'];
+            $totalOps += $result['ops'];
+            $errors += $result['errors'];
+        }
+
+        $totalTime = microtime(true) - $startTime;
+        if ($totalTime <= 0) {
+            $totalTime = 0.0001;
+        }
+
+        $throughput = $totalBytes / $totalTime;
+        $throughputGb = $throughput / (1024 * 1024 * 1024);
+        $opsPerSec = $totalOps / $totalTime;
+        $connPerSec = $connections / $totalTime;
+
+        echo "\nResults:\n";
+        echo "========\n";
+        echo sprintf("Total time: %.2fs\n", $totalTime);
+        echo sprintf("Connections/sec: %.2f\n", $connPerSec);
+        echo sprintf("Ops/sec: %.2f\n", $opsPerSec);
+        echo sprintf("Throughput: %.4f GB/s\n", $throughputGb);
+        echo sprintf("Errors: %d\n", $errors);
+
+        return;
     }
 
     // Spawn concurrent workers
@@ -103,9 +330,12 @@ Co\run(function () {
             $protocol,
             $timeout,
             $payloadBytes,
+            $payloadDataBytes,
             $payloadChunk,
             $payloadRemainder,
+            $payloadSuffix,
             $sampleEvery,
+            $handshake,
             $channel
         ) {
             $count = 0;
@@ -154,29 +384,23 @@ Co\run(function () {
                     continue;
                 }
 
-                if ($protocol === 'mysql') {
-                    // Minimal COM_INIT_DB packet; adapter only checks command byte + db name.
-                    $data = "\x00\x00\x00\x00\x02db-abc123";
-                } else {
-                    // PostgreSQL startup message
-                    $data = pack('N', 196608); // Protocol version 3.0
-                    $data .= "user\0postgres\0database\0db-abc123\0\0";
-                }
-
-                $client->send($data);
+                $client->send($handshake);
                 $response = $client->recv(8192);
 
                 if ($payloadBytes > 0) {
-                    $remaining = $payloadBytes;
+                    $remaining = $payloadDataBytes;
                     while ($remaining > 0) {
                         if ($remaining > strlen($payloadChunk)) {
                             $client->send($payloadChunk);
                             $remaining -= strlen($payloadChunk);
                         } else {
-                            $chunk = $payloadRemainder !== '' ? $payloadRemainder : $payloadChunk;
+                            $chunk = $payloadRemainder !== '' ? $payloadRemainder : substr($payloadChunk, 0, $remaining);
                             $client->send($chunk);
                             $remaining = 0;
                         }
+                    }
+                    if ($payloadSuffix !== '') {
+                        $client->send($payloadSuffix);
                     }
 
                     $received = 0;

@@ -36,6 +36,8 @@
         "bench:tcp": "php benchmarks/tcp.php",
         "bench:wrk": "bash benchmarks/wrk.sh",
         "bench:wrk2": "bash benchmarks/wrk2.sh",
+        "bench:compare": "bash benchmarks/compare-http-servers.sh",
+        "bench:compare-tcp": "bash benchmarks/compare-tcp-servers.sh",
         "test": "phpunit",
         "test:integration": "bash tests/integration/run.sh",
         "lint": "pint",

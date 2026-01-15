@@ -5,16 +5,16 @@ namespace Utopia\Proxy\Server\HTTP;
 use Utopia\Proxy\Adapter\HTTP\Swoole as HTTPAdapter;
 use Swoole\Coroutine\Channel;
 use Swoole\Coroutine\Client as CoroutineClient;
-use Swoole\Http\Server;
+use Swoole\Coroutine\Http\Server as CoroutineServer;
 use Swoole\Http\Request;
 use Swoole\Http\Response;
 
 /**
- * High-performance HTTP proxy server (Swoole Implementation)
+ * High-performance HTTP proxy server (Swoole Coroutine Implementation)
  */
-class Swoole
+class SwooleCoroutine
 {
-    protected Server $server;
+    protected CoroutineServer $server;
     protected HTTPAdapter $adapter;
     protected array $config;
     /** @var array<string, Channel> */
@@ -66,7 +66,8 @@ class Swoole
             'raw_backend_assume_ok' => false,
         ], $config);
 
-        $this->server = new Server($host, $port, $this->config['server_mode']);
+        $this->initAdapter();
+        $this->server = new CoroutineServer($host, $port, false, (bool)$this->config['enable_reuse_port']);
         $this->configure();
     }
 
@@ -103,28 +104,27 @@ class Swoole
             // Enable stats
             'task_enable_coroutine' => true,
         ]);
-
-        $this->server->on('start', $this->onStart(...));
-        $this->server->on('workerStart', $this->onWorkerStart(...));
-        $this->server->on('request', $this->onRequest(...));
+        $this->server->handle('/', $this->onRequest(...));
     }
 
-    public function onStart(Server $server): void
+    protected function initAdapter(): void
+    {
+        if (isset($this->config['adapter'])) {
+            $this->adapter = $this->config['adapter'];
+        } else {
+            $this->adapter = new HTTPAdapter();
+        }
+    }
+
+    public function onStart(): void
     {
         echo "HTTP Proxy Server started at http://{$this->config['host']}:{$this->config['port']}\n";
         echo "Workers: {$this->config['workers']}\n";
         echo "Max connections: {$this->config['max_connections']}\n";
     }
 
-    public function onWorkerStart(Server $server, int $workerId): void
+    public function onWorkerStart(int $workerId = 0): void
     {
-        // Use adapter from config, or create default
-        if (isset($this->config['adapter'])) {
-            $this->adapter = $this->config['adapter'];
-        } else {
-            $this->adapter = new HTTPAdapter();
-        }
-
         echo "Worker #{$workerId} started (Adapter: {$this->adapter->getName()})\n";
     }
 
@@ -496,15 +496,26 @@ class Swoole
 
     public function start(): void
     {
-        $this->server->start();
+        if (\Swoole\Coroutine::getCid() > 0) {
+            $this->onStart();
+            $this->onWorkerStart(0);
+            $this->server->start();
+            return;
+        }
+
+        \Swoole\Coroutine\run(function (): void {
+            $this->onStart();
+            $this->onWorkerStart(0);
+            $this->server->start();
+        });
     }
 
     public function getStats(): array
     {
         return [
-            'connections' => $this->server->stats()['connection_num'] ?? 0,
-            'requests' => $this->server->stats()['request_count'] ?? 0,
-            'workers' => $this->server->stats()['worker_num'] ?? 0,
+            'connections' => 0,
+            'requests' => 0,
+            'workers' => 1,
             'adapter' => $this->adapter?->getStats() ?? [],
         ];
     }

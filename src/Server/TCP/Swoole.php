@@ -150,36 +150,43 @@ class Swoole
      */
     public function onReceive(Server $server, int $fd, int $reactorId, string $data): void
     {
-        $startTime = microtime(true);
+        // Fast path: existing connection - just forward
+        if (isset($this->backendClients[$fd])) {
+            $this->backendClients[$fd]->send($data);
+            return;
+        }
 
+        // Slow path: new connection setup
         try {
-            $port = $this->clientPorts[$fd] ?? ($server->getClientInfo($fd)['server_port'] ?? 0);
+            $port = $this->clientPorts[$fd] ?? null;
+            if ($port === null) {
+                $info = $server->getClientInfo($fd);
+                $port = $info['server_port'] ?? 0;
+                if ($port === 0) {
+                    throw new \Exception('Missing server port for connection');
+                }
+                $this->clientPorts[$fd] = $port;
+            }
 
             $adapter = $this->adapters[$port] ?? null;
-            if (!$adapter) {
-                throw new \Exception("No adapter for port {$port}");
+            if ($adapter === null) {
+                throw new \Exception("No adapter registered for port {$port}");
             }
 
-            $backendClient = $this->backendClients[$fd] ?? null;
-            if (!$backendClient) {
-                // Parse database ID from initial packet (SNI or first query)
-                $databaseId = $this->clientDatabaseIds[$fd]
-                    ?? $adapter->parseDatabaseId($data, $fd);
-                $this->clientDatabaseIds[$fd] = $databaseId;
+            // Parse database ID from initial packet
+            $databaseId = $adapter->parseDatabaseId($data, $fd);
+            $this->clientDatabaseIds[$fd] = $databaseId;
 
-                // Get or create backend connection
-                $backendClient = $adapter->getBackendConnection($databaseId, $fd);
-                $this->backendClients[$fd] = $backendClient;
-            }
+            // Get backend connection
+            $backendClient = $adapter->getBackendConnection($databaseId, $fd);
+            $this->backendClients[$fd] = $backendClient;
 
-            // Forward data to backend using zero-copy where possible
-            $this->forwardToBackend($backendClient, $data);
+            // Forward initial data
+            $backendClient->send($data);
 
-            // Start bidirectional forwarding in coroutine
-            if (!isset($this->forwarding[$fd])) {
-                $this->forwarding[$fd] = true;
-                $this->startForwarding($server, $fd, $backendClient);
-            }
+            // Start bidirectional forwarding
+            $this->forwarding[$fd] = true;
+            $this->startForwarding($server, $fd, $backendClient);
 
         } catch (\Exception $e) {
             echo "Error handling data from #{$fd}: {$e->getMessage()}\n";
@@ -208,11 +215,6 @@ class Swoole
         });
     }
 
-    protected function forwardToBackend(Client $backendClient, string $data): void
-    {
-        $backendClient->send($data);
-    }
-
     public function onClose(Server $server, int $fd, int $reactorId): void
     {
         if (!empty($this->config['log_connections'])) {
@@ -223,6 +225,17 @@ class Swoole
             $this->backendClients[$fd]->close();
             unset($this->backendClients[$fd]);
         }
+
+        // Clean up adapter's connection pool
+        if (isset($this->clientDatabaseIds[$fd]) && isset($this->clientPorts[$fd])) {
+            $port = $this->clientPorts[$fd];
+            $databaseId = $this->clientDatabaseIds[$fd];
+            $adapter = $this->adapters[$port] ?? null;
+            if ($adapter) {
+                $adapter->closeBackendConnection($databaseId, $fd);
+            }
+        }
+
         unset($this->forwarding[$fd]);
         unset($this->clientDatabaseIds[$fd]);
         unset($this->clientPorts[$fd]);

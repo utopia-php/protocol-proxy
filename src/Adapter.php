@@ -38,6 +38,12 @@ abstract class Adapter
 
     protected ?Service $service = null;
 
+    /** @var bool Skip validation for trusted backends */
+    protected bool $skipValidation = false;
+
+    /** @var callable|null Cached resolve callback */
+    protected $resolveCallback = null;
+
     public function __construct(?Service $service = null)
     {
         $this->service = $service ?? $this->defaultService();
@@ -75,6 +81,21 @@ abstract class Adapter
     public function getService(): ?Service
     {
         return $this->service;
+    }
+
+    /**
+     * Enable fast routing mode (skip SSRF validation for trusted backends)
+     *
+     * Only use this when you control the backend endpoint resolution
+     * and trust that it returns safe endpoints.
+     *
+     * @param bool $skip
+     * @return $this
+     */
+    public function setSkipValidation(bool $skip): static
+    {
+        $this->skipValidation = $skip;
+        return $this;
     }
 
     /**
@@ -116,7 +137,74 @@ abstract class Adapter
             throw new \Exception("Resolve action returned empty endpoint for: {$resourceId}");
         }
 
+        // Validate the resolved endpoint to prevent SSRF
+        $this->validateEndpoint($endpoint);
+
         return $endpoint;
+    }
+
+    /**
+     * Validate backend endpoint to prevent SSRF attacks
+     *
+     * @param string $endpoint
+     * @return void
+     * @throws \Exception If endpoint is invalid or points to restricted address
+     */
+    protected function validateEndpoint(string $endpoint): void
+    {
+        // Parse host and port
+        $parts = explode(':', $endpoint);
+        if (count($parts) < 1 || count($parts) > 2) {
+            throw new \Exception("Invalid endpoint format: {$endpoint}");
+        }
+
+        $host = $parts[0];
+        $port = isset($parts[1]) ? (int)$parts[1] : 0;
+
+        // Validate port range (if specified)
+        if ($port > 0 && ($port < 1 || $port > 65535)) {
+            throw new \Exception("Invalid port number: {$port}");
+        }
+
+        // Resolve hostname to IP
+        $ip = gethostbyname($host);
+        if ($ip === $host && !filter_var($ip, FILTER_VALIDATE_IP)) {
+            // DNS resolution failed and it's not a valid IP
+            throw new \Exception("Cannot resolve hostname: {$host}");
+        }
+
+        // Check for private/reserved IP ranges (SSRF protection)
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+            $longIp = ip2long($ip);
+            if ($longIp === false) {
+                throw new \Exception("Invalid IP address: {$ip}");
+            }
+
+            // Block private and reserved ranges
+            $blockedRanges = [
+                ['10.0.0.0', '10.255.255.255'],          // Private: 10.0.0.0/8
+                ['172.16.0.0', '172.31.255.255'],        // Private: 172.16.0.0/12
+                ['192.168.0.0', '192.168.255.255'],      // Private: 192.168.0.0/16
+                ['127.0.0.0', '127.255.255.255'],        // Loopback: 127.0.0.0/8
+                ['169.254.0.0', '169.254.255.255'],      // Link-local: 169.254.0.0/16
+                ['224.0.0.0', '239.255.255.255'],        // Multicast: 224.0.0.0/4
+                ['240.0.0.0', '255.255.255.255'],        // Reserved: 240.0.0.0/4
+                ['0.0.0.0', '0.255.255.255'],            // Current network: 0.0.0.0/8
+            ];
+
+            foreach ($blockedRanges as [$rangeStart, $rangeEnd]) {
+                $rangeStartLong = ip2long($rangeStart);
+                $rangeEndLong = ip2long($rangeEnd);
+                if ($longIp >= $rangeStartLong && $longIp <= $rangeEndLong) {
+                    throw new \Exception("Access to private/reserved IP address is forbidden: {$ip}");
+                }
+            }
+        } elseif (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+            // Block IPv6 loopback and link-local
+            if ($ip === '::1' || strpos($ip, 'fe80:') === 0 || strpos($ip, 'fc00:') === 0 || strpos($ip, 'fd00:') === 0) {
+                throw new \Exception("Access to private/reserved IPv6 address is forbidden: {$ip}");
+            }
+        }
     }
 
     /**
@@ -143,67 +231,72 @@ abstract class Adapter
      */
     public function route(string $resourceId): ConnectionResult
     {
-        $startTime = microtime(true);
-
-        // Execute init actions (before route)
-        $this->executeActions(Action::TYPE_INIT, $resourceId);
-
-        // Check routing cache first (O(1) lookup)
+        // Fast path: check cache first (O(1) lookup)
         $cached = $this->routingTable->get($resourceId);
-        if ($cached && (\time() - $cached['updated']) < 1) {
+        $now = \time();
+
+        if ($cached && ($now - $cached['updated']) < 1) {
             $this->stats['cache_hits']++;
             $this->stats['connections']++;
 
-            $result = new ConnectionResult(
+            return new ConnectionResult(
                 endpoint: $cached['endpoint'],
                 protocol: $this->getProtocol(),
-                metadata: [
-                    'cached' => true,
-                    'latency_ms' => \round((\microtime(true) - $startTime) * 1000, 2),
-                ]
+                metadata: ['cached' => true]
             );
-
-            // Execute shutdown actions (after route)
-            $this->executeActions(Action::TYPE_SHUTDOWN, $resourceId, $cached['endpoint'], $result);
-
-            return $result;
         }
 
         $this->stats['cache_misses']++;
 
         try {
-            // Get backend endpoint from protocol-specific logic
-            $endpoint = $this->getBackendEndpoint($resourceId);
+            // Get backend endpoint - use cached callback for speed
+            $endpoint = $this->getBackendEndpointFast($resourceId);
 
             // Update routing cache
             $this->routingTable->set($resourceId, [
                 'endpoint' => $endpoint,
-                'updated' => \time(),
+                'updated' => $now,
             ]);
 
             $this->stats['connections']++;
 
-            $result = new ConnectionResult(
+            return new ConnectionResult(
                 endpoint: $endpoint,
                 protocol: $this->getProtocol(),
-                metadata: [
-                    'cached' => false,
-                    'latency_ms' => \round((\microtime(true) - $startTime) * 1000, 2),
-                ]
+                metadata: ['cached' => false]
             );
-
-            // Execute shutdown actions (after route)
-            $this->executeActions(Action::TYPE_SHUTDOWN, $resourceId, $endpoint, $result);
-
-            return $result;
         } catch (\Exception $e) {
             $this->stats['routing_errors']++;
-
-            // Execute error actions (on routing error)
-            $this->executeActions(Action::TYPE_ERROR, $resourceId, $e);
-
             throw $e;
         }
+    }
+
+    /**
+     * Fast endpoint resolution with cached callback
+     *
+     * @param string $resourceId
+     * @return string
+     * @throws \Exception
+     */
+    protected function getBackendEndpointFast(string $resourceId): string
+    {
+        // Cache the resolve callback
+        if ($this->resolveCallback === null) {
+            $this->resolveCallback = $this->getActionCallback($this->getResolveAction());
+        }
+
+        $endpoint = ($this->resolveCallback)($resourceId);
+
+        if (empty($endpoint)) {
+            throw new \Exception("Resolve action returned empty endpoint for: {$resourceId}");
+        }
+
+        // Skip validation if configured (for trusted backends)
+        if (!$this->skipValidation) {
+            $this->validateEndpoint($endpoint);
+        }
+
+        return $endpoint;
     }
 
     /**

@@ -119,17 +119,50 @@ class Swoole extends Adapter
      */
     protected function parsePostgreSQLDatabaseId(string $data): string
     {
-        // PostgreSQL startup message contains database name
-        if (preg_match('/database\x00([^\x00]+)\x00/', $data, $matches)) {
-            $dbName = $matches[1];
+        // Fast path: find "database\0" marker
+        $marker = "database\x00";
+        $pos = strpos($data, $marker);
+        if ($pos === false) {
+            throw new \Exception('Invalid PostgreSQL database name');
+        }
 
-            // Extract database ID from format: db-{id}.appwrite.network
-            if (preg_match('/^db-([a-z0-9]+)/', $dbName, $idMatches)) {
-                return $idMatches[1];
+        // Extract database name until next null byte
+        $start = $pos + 9; // strlen("database\0")
+        $end = strpos($data, "\x00", $start);
+        if ($end === false) {
+            throw new \Exception('Invalid PostgreSQL database name');
+        }
+
+        $dbName = substr($data, $start, $end - $start);
+
+        // Must start with "db-"
+        if (strncmp($dbName, 'db-', 3) !== 0) {
+            throw new \Exception('Invalid PostgreSQL database name');
+        }
+
+        // Extract ID (alphanumeric after "db-", stop at dot or end)
+        $idStart = 3;
+        $len = strlen($dbName);
+        $idEnd = $idStart;
+
+        while ($idEnd < $len) {
+            $c = $dbName[$idEnd];
+            if ($c === '.') {
+                break;
+            }
+            // Allow a-z, A-Z, 0-9
+            if (($c >= 'a' && $c <= 'z') || ($c >= 'A' && $c <= 'Z') || ($c >= '0' && $c <= '9')) {
+                $idEnd++;
+            } else {
+                throw new \Exception('Invalid PostgreSQL database name');
             }
         }
 
-        throw new \Exception('Invalid PostgreSQL database name');
+        if ($idEnd === $idStart) {
+            throw new \Exception('Invalid PostgreSQL database name');
+        }
+
+        return substr($dbName, $idStart, $idEnd - $idStart);
     }
 
     /**
@@ -144,16 +177,46 @@ class Swoole extends Adapter
     protected function parseMySQLDatabaseId(string $data): string
     {
         // MySQL COM_INIT_DB packet (0x02)
-        if (strlen($data) > 5 && ord($data[4]) === 0x02) {
-            $dbName = substr($data, 5);
+        $len = strlen($data);
+        if ($len <= 5 || ord($data[4]) !== 0x02) {
+            throw new \Exception('Invalid MySQL database name');
+        }
 
-            // Extract database ID from format: db-{id}
-            if (preg_match('/^db-([a-z0-9]+)/', $dbName, $matches)) {
-                return $matches[1];
+        // Extract database name, removing null terminator
+        $dbName = substr($data, 5);
+        $nullPos = strpos($dbName, "\x00");
+        if ($nullPos !== false) {
+            $dbName = substr($dbName, 0, $nullPos);
+        }
+
+        // Must start with "db-"
+        if (strncmp($dbName, 'db-', 3) !== 0) {
+            throw new \Exception('Invalid MySQL database name');
+        }
+
+        // Extract ID (alphanumeric after "db-", stop at dot or end)
+        $idStart = 3;
+        $nameLen = strlen($dbName);
+        $idEnd = $idStart;
+
+        while ($idEnd < $nameLen) {
+            $c = $dbName[$idEnd];
+            if ($c === '.') {
+                break;
+            }
+            // Allow a-z, A-Z, 0-9
+            if (($c >= 'a' && $c <= 'z') || ($c >= 'A' && $c <= 'Z') || ($c >= '0' && $c <= '9')) {
+                $idEnd++;
+            } else {
+                throw new \Exception('Invalid MySQL database name');
             }
         }
 
-        throw new \Exception('Invalid MySQL database name');
+        if ($idEnd === $idStart) {
+            throw new \Exception('Invalid MySQL database name');
+        }
+
+        return substr($dbName, $idStart, $idEnd - $idStart);
     }
 
     /**
