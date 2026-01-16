@@ -1,12 +1,11 @@
 <?php
 
-require __DIR__ . '/../vendor/autoload.php';
+require __DIR__.'/../vendor/autoload.php';
 
-use Utopia\Platform\Action;
-use Utopia\Proxy\Adapter\TCP\Swoole as TCPAdapter;
+use Utopia\Proxy\Resolver;
+use Utopia\Proxy\Resolver\Result;
 use Utopia\Proxy\Server\TCP\Swoole as TCPServer;
 use Utopia\Proxy\Server\TCP\SwooleCoroutine as TCPCoroutineServer;
-use Utopia\Proxy\Service\TCP as TCPService;
 
 /**
  * TCP Proxy Server Example (PostgreSQL + MySQL)
@@ -22,9 +21,8 @@ use Utopia\Proxy\Service\TCP as TCPService;
  * Test MySQL:
  *   mysql -h localhost -P 3306 -u root -D db-abc123
  */
-
 $serverImpl = strtolower(getenv('TCP_SERVER_IMPL') ?: 'swoole');
-if (!in_array($serverImpl, ['swoole', 'coroutine', 'coro'], true)) {
+if (! in_array($serverImpl, ['swoole', 'coroutine', 'coro'], true)) {
     $serverImpl = 'swoole';
 }
 if ($serverImpl === 'coro') {
@@ -33,12 +31,49 @@ if ($serverImpl === 'coro') {
 
 $envInt = static function (string $key, int $default): int {
     $value = getenv($key);
-    return $value === false ? $default : (int)$value;
+
+    return $value === false ? $default : (int) $value;
 };
 
 $workers = $envInt('TCP_WORKERS', swoole_cpu_num() * 2);
 $reactorNum = $envInt('TCP_REACTOR_NUM', swoole_cpu_num() * 2);
 $dispatchMode = $envInt('TCP_DISPATCH_MODE', 2);
+
+$backendEndpoint = getenv('TCP_BACKEND_ENDPOINT') ?: 'tcp-backend:15432';
+$skipValidation = filter_var(getenv('TCP_SKIP_VALIDATION') ?: 'false', FILTER_VALIDATE_BOOLEAN);
+
+// Create a simple resolver that returns the configured backend endpoint
+$resolver = new class ($backendEndpoint) implements Resolver {
+    public function __construct(private string $endpoint)
+    {
+    }
+
+    public function resolve(string $resourceId): Result
+    {
+        return new Result(endpoint: $this->endpoint);
+    }
+
+    public function onConnect(string $resourceId, array $metadata = []): void
+    {
+    }
+
+    public function onDisconnect(string $resourceId, array $metadata = []): void
+    {
+    }
+
+    public function trackActivity(string $resourceId, array $metadata = []): void
+    {
+    }
+
+    public function invalidateCache(string $resourceId): void
+    {
+    }
+
+    public function getStats(): array
+    {
+        return ['resolver' => 'static', 'endpoint' => $this->endpoint];
+    }
+};
 
 $config = [
     // Server settings
@@ -70,14 +105,17 @@ $config = [
 
     // Database connection
     'db_host' => getenv('DB_HOST') ?: 'localhost',
-    'db_port' => (int)(getenv('DB_PORT') ?: 3306),
+    'db_port' => (int) (getenv('DB_PORT') ?: 3306),
     'db_user' => getenv('DB_USER') ?: 'appwrite',
     'db_pass' => getenv('DB_PASS') ?: 'password',
     'db_name' => getenv('DB_NAME') ?: 'appwrite',
 
     // Redis cache
     'redis_host' => getenv('REDIS_HOST') ?: '127.0.0.1',
-    'redis_port' => (int)(getenv('REDIS_PORT') ?: 6379),
+    'redis_port' => (int) (getenv('REDIS_PORT') ?: 6379),
+
+    // Skip SSRF validation for trusted backends (e.g., Docker internal networks)
+    'skip_validation' => $skipValidation,
 ];
 
 $postgresPort = $envInt('TCP_POSTGRES_PORT', 5432);
@@ -89,43 +127,19 @@ if ($ports === []) {
 
 echo "Starting TCP Proxy Server...\n";
 echo "Host: {$config['host']}\n";
-echo "Ports: " . implode(', ', $ports) . "\n";
+echo 'Ports: '.implode(', ', $ports)."\n";
 echo "Workers: {$config['workers']}\n";
 echo "Max connections: {$config['max_connections']}\n";
 echo "Server impl: {$serverImpl}\n";
 echo "\n";
 
-$backendEndpoint = getenv('TCP_BACKEND_ENDPOINT') ?: 'tcp-backend:15432';
-
-$skipValidation = filter_var(getenv('TCP_SKIP_VALIDATION') ?: 'false', FILTER_VALIDATE_BOOLEAN);
-
-$adapterFactory = function (int $port) use ($backendEndpoint, $skipValidation): TCPAdapter {
-    $adapter = new TCPAdapter(port: $port);
-    $service = $adapter->getService() ?? new TCPService();
-
-    $service->addAction('resolve', (new class extends Action {})
-        ->callback(function (string $databaseId) use ($backendEndpoint): string {
-            return $backendEndpoint;
-        }));
-
-    $adapter->setService($service);
-
-    // Skip SSRF validation for trusted backends (e.g., benchmarks)
-    if ($skipValidation) {
-        $adapter->setSkipValidation(true);
-    }
-
-    return $adapter;
-};
-
 $serverClass = $serverImpl === 'swoole' ? TCPServer::class : TCPCoroutineServer::class;
 $server = new $serverClass(
-    host: $config['host'],
-    ports: $ports,
-    workers: $config['workers'],
-    config: array_merge($config, [
-        'adapter_factory' => $adapterFactory,
-    ])
+    $resolver,
+    $config['host'],
+    $ports,
+    $config['workers'],
+    $config
 );
 
 $server->start();

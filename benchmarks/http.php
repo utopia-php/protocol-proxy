@@ -24,11 +24,13 @@ Co\run(function () {
 
     $envInt = static function (string $key, int $default): int {
         $value = getenv($key);
-        return $value === false ? $default : (int)$value;
+
+        return $value === false ? $default : (int) $value;
     };
     $envFloat = static function (string $key, float $default): float {
         $value = getenv($key);
-        return $value === false ? $default : (float)$value;
+
+        return $value === false ? $default : (float) $value;
     };
     $envBool = static function (string $key, bool $default): bool {
         $value = getenv($key);
@@ -36,6 +38,7 @@ Co\run(function () {
             return $default;
         }
         $parsed = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+
         return $parsed ?? $default;
     };
 
@@ -47,10 +50,11 @@ Co\run(function () {
     $timeout = $envFloat('BENCH_TIMEOUT', 10);
     $keepAlive = $envBool('BENCH_KEEP_ALIVE', true);
     $sampleTarget = $envInt('BENCH_SAMPLE_TARGET', 200000);
-    $sampleEvery = $envInt('BENCH_SAMPLE_EVERY', max(1, (int)ceil($requests / max(1, $sampleTarget))));
+    $sampleEvery = $envInt('BENCH_SAMPLE_EVERY', max(1, (int) ceil($requests / max(1, $sampleTarget))));
 
     if ($requests < 1) {
         echo "Invalid request count.\n";
+
         return;
     }
     if ($concurrent > $requests) {
@@ -58,6 +62,7 @@ Co\run(function () {
     }
     if ($concurrent < 1) {
         echo "Invalid concurrency.\n";
+
         return;
     }
 
@@ -65,7 +70,7 @@ Co\run(function () {
     echo "  Host: {$host}:{$port}\n";
     echo "  Concurrent: {$concurrent}\n";
     echo "  Total requests: {$requests}\n";
-    echo "  Keep-alive: " . ($keepAlive ? 'yes' : 'no') . "\n";
+    echo '  Keep-alive: '.($keepAlive ? 'yes' : 'no')."\n";
     echo "  Sample every: {$sampleEvery} req\n\n";
 
     $startTime = microtime(true);
@@ -102,6 +107,7 @@ Co\run(function () {
                     'errors' => 0,
                     'samples' => [],
                 ]);
+
                 return;
             }
 
@@ -112,6 +118,7 @@ Co\run(function () {
                     'keep_alive' => $keepAlive,
                 ]);
                 $client->setHeaders(['Host' => $host]);
+
                 return $client;
             };
 
@@ -191,7 +198,7 @@ Co\run(function () {
                 $max = $result['max'];
             }
         }
-        if (!empty($result['samples'])) {
+        if (! empty($result['samples'])) {
             $samples = array_merge($samples, $result['samples']);
         }
     }
@@ -201,6 +208,7 @@ Co\run(function () {
     // Calculate statistics
     if ($totalCount === 0) {
         echo "No requests completed.\n";
+
         return;
     }
 
@@ -209,9 +217,9 @@ Co\run(function () {
 
     sort($samples);
     $sampleCount = count($samples);
-    $p50 = $sampleCount ? $samples[(int)floor($sampleCount * 0.5)] : 0.0;
-    $p95 = $sampleCount ? $samples[(int)floor($sampleCount * 0.95)] : 0.0;
-    $p99 = $sampleCount ? $samples[(int)floor($sampleCount * 0.99)] : 0.0;
+    $p50 = $sampleCount ? $samples[(int) floor($sampleCount * 0.5)] : 0.0;
+    $p95 = $sampleCount ? $samples[(int) floor($sampleCount * 0.95)] : 0.0;
+    $p99 = $sampleCount ? $samples[(int) floor($sampleCount * 0.99)] : 0.0;
 
     echo "\nResults:\n";
     echo "========\n";
@@ -229,10 +237,16 @@ Co\run(function () {
     // Performance goals
     echo "\nPerformance Goals:\n";
     echo "==================\n";
-    echo sprintf("Throughput goal: 250k+ req/s... %s\n",
-        $throughput >= 250000 ? "✓ PASS" : "✗ FAIL");
-    echo sprintf("p50 latency goal: <1ms... %s\n",
-        $p50 < 1.0 ? "✓ PASS" : "✗ FAIL");
-    echo sprintf("p99 latency goal: <5ms... %s\n",
-        $p99 < 5.0 ? "✓ PASS" : "✗ FAIL");
+    echo sprintf(
+        "Throughput goal: 250k+ req/s... %s\n",
+        $throughput >= 250000 ? '✓ PASS' : '✗ FAIL'
+    );
+    echo sprintf(
+        "p50 latency goal: <1ms... %s\n",
+        $p50 < 1.0 ? '✓ PASS' : '✗ FAIL'
+    );
+    echo sprintf(
+        "p99 latency goal: <5ms... %s\n",
+        $p99 < 5.0 ? '✓ PASS' : '✗ FAIL'
+    );
 });

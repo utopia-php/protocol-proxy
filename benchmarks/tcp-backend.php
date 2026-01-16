@@ -2,7 +2,8 @@
 
 $envInt = static function (string $key, int $default): int {
     $value = getenv($key);
-    return $value === false ? $default : (int)$value;
+
+    return $value === false ? $default : (int) $value;
 };
 
 $host = getenv('BACKEND_HOST') ?: '127.0.0.1';

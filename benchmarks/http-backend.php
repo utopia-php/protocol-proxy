@@ -1,8 +1,8 @@
 <?php
 
 $host = getenv('BACKEND_HOST') ?: '127.0.0.1';
-$port = (int)(getenv('BACKEND_PORT') ?: 5678);
-$workers = (int)(getenv('BACKEND_WORKERS') ?: (function_exists('swoole_cpu_num') ? swoole_cpu_num() : 4));
+$port = (int) (getenv('BACKEND_PORT') ?: 5678);
+$workers = (int) (getenv('BACKEND_WORKERS') ?: (function_exists('swoole_cpu_num') ? swoole_cpu_num() : 4));
 
 $server = new Swoole\Http\Server($host, $port, SWOOLE_PROCESS);
 

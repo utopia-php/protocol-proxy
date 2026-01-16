@@ -24,11 +24,13 @@ Co\run(function () {
 
     $envInt = static function (string $key, int $default): int {
         $value = getenv($key);
-        return $value === false ? $default : (int)$value;
+
+        return $value === false ? $default : (int) $value;
     };
     $envFloat = static function (string $key, float $default): float {
         $value = getenv($key);
-        return $value === false ? $default : (float)$value;
+
+        return $value === false ? $default : (float) $value;
     };
     $envBool = static function (string $key, bool $default): bool {
         $value = getenv($key);
@@ -36,6 +38,7 @@ Co\run(function () {
             return $default;
         }
         $parsed = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+
         return $parsed ?? $default;
     };
 
@@ -61,19 +64,20 @@ Co\run(function () {
         $connections = max(300000, $concurrent * 100);
         if ($payloadBytes > 0) {
             $connections = max(100000, $concurrent * 20);
-            $maxByTarget = (int)floor($targetBytes / max(1, $payloadBytes));
+            $maxByTarget = (int) floor($targetBytes / max(1, $payloadBytes));
             if ($maxByTarget > 0) {
                 $connections = min($connections, $maxByTarget);
             }
         }
     } else {
-        $connections = (int)$connectionsEnv;
+        $connections = (int) $connectionsEnv;
     }
     $sampleTarget = $envInt('BENCH_SAMPLE_TARGET', 200000);
-    $sampleEvery = $envInt('BENCH_SAMPLE_EVERY', max(1, (int)ceil($connections / max(1, $sampleTarget))));
+    $sampleEvery = $envInt('BENCH_SAMPLE_EVERY', max(1, (int) ceil($connections / max(1, $sampleTarget))));
 
     if ($connections < 1) {
         echo "Invalid connection count.\n";
+
         return;
     }
     if ($concurrent > $connections) {
@@ -81,6 +85,7 @@ Co\run(function () {
     }
     if ($concurrent < 1) {
         echo "Invalid concurrency.\n";
+
         return;
     }
 
@@ -130,10 +135,11 @@ Co\run(function () {
     }
 
     if ($persistent) {
-                if ($payloadBytes <= 0) {
-                    echo "Persistent mode requires BENCH_PAYLOAD_BYTES > 0.\n";
-                    return;
-                }
+        if ($payloadBytes <= 0) {
+            echo "Persistent mode requires BENCH_PAYLOAD_BYTES > 0.\n";
+
+            return;
+        }
 
         echo "Mode: persistent\n";
         if ($streamBytes > 0) {
@@ -162,7 +168,6 @@ Co\run(function () {
             Coroutine::create(function () use (
                 $host,
                 $port,
-                $protocol,
                 $timeout,
                 $payloadBytes,
                 $payloadDataBytes,
@@ -181,13 +186,14 @@ Co\run(function () {
                 $client = new Client(SWOOLE_SOCK_TCP);
                 $client->set(['timeout' => $timeout]);
 
-                if (!$client->connect($host, $port, $timeout)) {
+                if (! $client->connect($host, $port, $timeout)) {
                     $errors++;
                     $channel->push([
                         'bytes' => 0,
                         'ops' => 0,
                         'errors' => $errors,
                     ]);
+
                     return;
                 }
 
@@ -199,6 +205,7 @@ Co\run(function () {
                         'ops' => 0,
                         'errors' => $errors,
                     ]);
+
                     return;
                 }
 
@@ -211,6 +218,7 @@ Co\run(function () {
                         'ops' => 0,
                         'errors' => $errors,
                     ]);
+
                     return;
                 }
 
@@ -327,7 +335,6 @@ Co\run(function () {
             $host,
             $port,
             $workerConnections,
-            $protocol,
             $timeout,
             $payloadBytes,
             $payloadDataBytes,
@@ -356,6 +363,7 @@ Co\run(function () {
                     'bytes' => 0,
                     'samples' => [],
                 ]);
+
                 return;
             }
 
@@ -367,7 +375,7 @@ Co\run(function () {
                     'timeout' => $timeout,
                 ]);
 
-                if (!$client->connect($host, $port, $timeout)) {
+                if (! $client->connect($host, $port, $timeout)) {
                     $errors++;
                     $latency = (microtime(true) - $connStart) * 1000;
                     $count++;
@@ -381,6 +389,7 @@ Co\run(function () {
                     if (($count % $sampleEvery) === 0) {
                         $samples[] = $latency;
                     }
+
                     continue;
                 }
 
@@ -469,7 +478,7 @@ Co\run(function () {
                 $max = $result['max'];
             }
         }
-        if (!empty($result['samples'])) {
+        if (! empty($result['samples'])) {
             $samples = array_merge($samples, $result['samples']);
         }
     }
@@ -479,6 +488,7 @@ Co\run(function () {
     // Calculate statistics
     if ($totalCount === 0) {
         echo "No connections completed.\n";
+
         return;
     }
 
@@ -487,9 +497,9 @@ Co\run(function () {
 
     sort($samples);
     $sampleCount = count($samples);
-    $p50 = $sampleCount ? $samples[(int)floor($sampleCount * 0.5)] : 0.0;
-    $p95 = $sampleCount ? $samples[(int)floor($sampleCount * 0.95)] : 0.0;
-    $p99 = $sampleCount ? $samples[(int)floor($sampleCount * 0.99)] : 0.0;
+    $p50 = $sampleCount ? $samples[(int) floor($sampleCount * 0.5)] : 0.0;
+    $p95 = $sampleCount ? $samples[(int) floor($sampleCount * 0.95)] : 0.0;
+    $p99 = $sampleCount ? $samples[(int) floor($sampleCount * 0.99)] : 0.0;
     $throughputGb = $bytes > 0 ? ($bytes / $totalTime / 1024 / 1024 / 1024) : 0.0;
 
     echo "\nResults:\n";
@@ -511,8 +521,12 @@ Co\run(function () {
     // Performance goals
     echo "\nPerformance Goals:\n";
     echo "==================\n";
-    echo sprintf("Connections/sec goal: 100k+... %s\n",
-        $connPerSec >= 100000 ? "✓ PASS" : "✗ FAIL");
-    echo sprintf("Forwarding overhead goal: <1ms... %s\n",
-        $avgLatency < 1.0 ? "✓ PASS" : "✗ FAIL");
+    echo sprintf(
+        "Connections/sec goal: 100k+... %s\n",
+        $connPerSec >= 100000 ? '✓ PASS' : '✗ FAIL'
+    );
+    echo sprintf(
+        "Forwarding overhead goal: <1ms... %s\n",
+        $avgLatency < 1.0 ? '✓ PASS' : '✗ FAIL'
+    );
 });

@@ -1,12 +1,11 @@
 <?php
 
-require __DIR__ . '/../vendor/autoload.php';
+require __DIR__.'/../vendor/autoload.php';
 
-use Utopia\Platform\Action;
-use Utopia\Proxy\Adapter\HTTP\Swoole as HTTPAdapter;
+use Utopia\Proxy\Resolver;
+use Utopia\Proxy\Resolver\Result;
 use Utopia\Proxy\Server\HTTP\Swoole as HTTPServer;
 use Utopia\Proxy\Server\HTTP\SwooleCoroutine as HTTPCoroutineServer;
-use Utopia\Proxy\Service\HTTP as HTTPService;
 
 /**
  * HTTP Proxy Server Example
@@ -19,8 +18,7 @@ use Utopia\Proxy\Service\HTTP as HTTPService;
  * Test:
  *   ab -n 100000 -c 1000 http://localhost:8080/
  */
-
-$workers = (int)(getenv('HTTP_WORKERS') ?: (swoole_cpu_num() * 2));
+$workers = (int) (getenv('HTTP_WORKERS') ?: (swoole_cpu_num() * 2));
 $serverMode = strtolower(getenv('HTTP_SERVER_MODE') ?: 'process');
 $serverModeValue = $serverMode === 'base' ? SWOOLE_BASE : SWOOLE_PROCESS;
 $fastPath = getenv('HTTP_FAST_PATH');
@@ -43,7 +41,7 @@ $directResponse = getenv('HTTP_DIRECT_RESPONSE');
 if ($directResponse === false || $directResponse === '') {
     $directResponse = null;
 }
-$directResponseStatus = (int)(getenv('HTTP_DIRECT_RESPONSE_STATUS') ?: 200);
+$directResponseStatus = (int) (getenv('HTTP_DIRECT_RESPONSE_STATUS') ?: 200);
 $rawBackend = getenv('HTTP_RAW_BACKEND');
 if ($rawBackend === false) {
     $rawBackend = false;
@@ -57,7 +55,7 @@ if ($rawBackendAssumeOk === false) {
     $rawBackendAssumeOk = filter_var($rawBackendAssumeOk, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false;
 }
 $serverImpl = strtolower(getenv('HTTP_SERVER_IMPL') ?: 'swoole');
-if (!in_array($serverImpl, ['swoole', 'coroutine', 'coro'], true)) {
+if (! in_array($serverImpl, ['swoole', 'coroutine', 'coro'], true)) {
     $serverImpl = 'swoole';
 }
 if ($serverImpl === 'coro') {
@@ -67,13 +65,13 @@ $backendPoolSize = getenv('HTTP_BACKEND_POOL_SIZE');
 if ($backendPoolSize === false || $backendPoolSize === '') {
     $backendPoolSize = 2048;
 } else {
-    $backendPoolSize = (int)$backendPoolSize;
+    $backendPoolSize = (int) $backendPoolSize;
 }
 $httpKeepaliveTimeout = getenv('HTTP_KEEPALIVE_TIMEOUT');
 if ($httpKeepaliveTimeout === false || $httpKeepaliveTimeout === '') {
     $httpKeepaliveTimeout = 60;
 } else {
-    $httpKeepaliveTimeout = (int)$httpKeepaliveTimeout;
+    $httpKeepaliveTimeout = (int) $httpKeepaliveTimeout;
 }
 $openHttp2 = getenv('HTTP_OPEN_HTTP2');
 if ($openHttp2 === false) {
@@ -82,14 +80,50 @@ if ($openHttp2 === false) {
     $openHttp2 = filter_var($openHttp2, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false;
 }
 
+$backendEndpoint = getenv('HTTP_BACKEND_ENDPOINT') ?: 'http-backend:5678';
+$skipValidation = filter_var(getenv('HTTP_SKIP_VALIDATION') ?: 'false', FILTER_VALIDATE_BOOLEAN);
+
+// Create a simple resolver that returns the configured backend endpoint
+$resolver = new class ($backendEndpoint) implements Resolver {
+    public function __construct(private string $endpoint)
+    {
+    }
+
+    public function resolve(string $resourceId): Result
+    {
+        return new Result(endpoint: $this->endpoint);
+    }
+
+    public function onConnect(string $resourceId, array $metadata = []): void
+    {
+    }
+
+    public function onDisconnect(string $resourceId, array $metadata = []): void
+    {
+    }
+
+    public function trackActivity(string $resourceId, array $metadata = []): void
+    {
+    }
+
+    public function invalidateCache(string $resourceId): void
+    {
+    }
+
+    public function getStats(): array
+    {
+        return ['resolver' => 'static', 'endpoint' => $this->endpoint];
+    }
+};
+
 $config = [
     // Server settings
     'host' => '0.0.0.0',
     'port' => 8080,
     'workers' => $workers,
     'server_mode' => $serverModeValue,
-    'reactor_num' => (int)(getenv('HTTP_REACTOR_NUM') ?: (swoole_cpu_num() * 2)),
-    'dispatch_mode' => (int)(getenv('HTTP_DISPATCH_MODE') ?: 2),
+    'reactor_num' => (int) (getenv('HTTP_REACTOR_NUM') ?: (swoole_cpu_num() * 2)),
+    'dispatch_mode' => (int) (getenv('HTTP_DISPATCH_MODE') ?: 2),
 
     // Performance tuning
     'max_connections' => 100_000,
@@ -120,14 +154,17 @@ $config = [
 
     // Database connection
     'db_host' => getenv('DB_HOST') ?: 'localhost',
-    'db_port' => (int)(getenv('DB_PORT') ?: 3306),
+    'db_port' => (int) (getenv('DB_PORT') ?: 3306),
     'db_user' => getenv('DB_USER') ?: 'appwrite',
     'db_pass' => getenv('DB_PASS') ?: 'password',
     'db_name' => getenv('DB_NAME') ?: 'appwrite',
 
     // Redis cache
     'redis_host' => getenv('REDIS_HOST') ?: '127.0.0.1',
-    'redis_port' => (int)(getenv('REDIS_PORT') ?: 6379),
+    'redis_port' => (int) (getenv('REDIS_PORT') ?: 6379),
+
+    // Skip SSRF validation for trusted backends (e.g., Docker internal networks)
+    'skip_validation' => $skipValidation,
 ];
 
 echo "Starting HTTP Proxy Server...\n";
@@ -137,32 +174,13 @@ echo "Max connections: {$config['max_connections']}\n";
 echo "Server impl: {$serverImpl}\n";
 echo "\n";
 
-$backendEndpoint = getenv('HTTP_BACKEND_ENDPOINT') ?: 'http-backend:5678';
-$skipValidation = filter_var(getenv('HTTP_SKIP_VALIDATION') ?: 'false', FILTER_VALIDATE_BOOLEAN);
-
-$adapter = new HTTPAdapter();
-$service = $adapter->getService() ?? new HTTPService();
-
-$service->addAction('resolve', (new class extends Action {})
-    ->callback(function (string $hostname) use ($backendEndpoint): string {
-        return $backendEndpoint;
-    }));
-
-$adapter->setService($service);
-
-// Skip SSRF validation for trusted backends (e.g., benchmarks)
-if ($skipValidation) {
-    $adapter->setSkipValidation(true);
-}
-
 $serverClass = $serverImpl === 'swoole' ? HTTPServer::class : HTTPCoroutineServer::class;
 $server = new $serverClass(
-    host: $config['host'],
-    port: $config['port'],
-    workers: $config['workers'],
-    config: array_merge($config, [
-        'adapter' => $adapter,
-    ])
+    $resolver,
+    $config['host'],
+    $config['port'],
+    $config['workers'],
+    $config
 );
 
 $server->start();
