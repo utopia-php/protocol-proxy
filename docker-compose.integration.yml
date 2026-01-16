@@ -23,17 +23,20 @@ services:
   http-proxy:
     environment:
       HTTP_BACKEND_ENDPOINT: http-backend:5678
+      HTTP_SKIP_VALIDATION: "true"
     depends_on:
       - http-backend
 
   tcp-proxy:
     environment:
       TCP_BACKEND_ENDPOINT: tcp-backend:15432
+      TCP_SKIP_VALIDATION: "true"
     depends_on:
       - tcp-backend
 
   smtp-proxy:
     environment:
       SMTP_BACKEND_ENDPOINT: smtp-backend:1025
+      SMTP_SKIP_VALIDATION: "true"
     depends_on:
       - smtp-backend
