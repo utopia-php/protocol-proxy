@@ -3,30 +3,27 @@
 namespace Utopia\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Utopia\Platform\Action;
 use Utopia\Proxy\Adapter\HTTP\Swoole as HTTPAdapter;
-use Utopia\Proxy\Service\HTTP as HTTPService;
+use Utopia\Proxy\Resolver\Exception as ResolverException;
 
 class AdapterStatsTest extends TestCase
 {
+    protected MockResolver $resolver;
+
     protected function setUp(): void
     {
-        if (!\extension_loaded('swoole')) {
+        if (! \extension_loaded('swoole')) {
             $this->markTestSkipped('ext-swoole is required to run adapter tests.');
         }
+
+        $this->resolver = new MockResolver();
     }
 
-    public function testCacheHitUpdatesStats(): void
+    public function test_cache_hit_updates_stats(): void
     {
-        $adapter = new HTTPAdapter();
-        $service = new HTTPService();
-
-        $service->addAction('resolve', (new class extends Action {})
-            ->callback(function (string $hostname): string {
-                return '127.0.0.1:8080';
-            }));
-
-        $adapter->setService($service);
+        $this->resolver->setEndpoint('127.0.0.1:8080');
+        $adapter = new HTTPAdapter($this->resolver);
+        $adapter->setSkipValidation(true);
 
         $start = time();
         while (time() === $start) {
@@ -49,22 +46,15 @@ class AdapterStatsTest extends TestCase
         $this->assertGreaterThan(0, $stats['routing_table_memory']);
     }
 
-    public function testRoutingErrorIncrementsStats(): void
+    public function test_routing_error_increments_stats(): void
     {
-        $adapter = new HTTPAdapter();
-        $service = new HTTPService();
-
-        $service->addAction('resolve', (new class extends Action {})
-            ->callback(function (string $hostname): string {
-                throw new \Exception('No backend');
-            }));
-
-        $adapter->setService($service);
+        $this->resolver->setException(new ResolverException('No backend'));
+        $adapter = new HTTPAdapter($this->resolver);
 
         try {
             $adapter->route('api.example.com');
             $this->fail('Expected routing error was not thrown.');
-        } catch (\Exception $e) {
+        } catch (ResolverException $e) {
             $this->assertSame('No backend', $e->getMessage());
         }
 
@@ -73,5 +63,19 @@ class AdapterStatsTest extends TestCase
         $this->assertSame(1, $stats['cache_misses']);
         $this->assertSame(0, $stats['cache_hits']);
         $this->assertSame(0.0, $stats['cache_hit_rate']);
+    }
+
+    public function test_resolver_stats_are_included_in_adapter_stats(): void
+    {
+        $this->resolver->setEndpoint('127.0.0.1:8080');
+        $adapter = new HTTPAdapter($this->resolver);
+        $adapter->setSkipValidation(true);
+
+        $adapter->route('api.example.com');
+
+        $stats = $adapter->getStats();
+        $this->assertArrayHasKey('resolver', $stats);
+        $this->assertIsArray($stats['resolver']);
+        $this->assertSame('mock', $stats['resolver']['resolver']);
     }
 }
