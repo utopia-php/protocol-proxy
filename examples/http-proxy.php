@@ -14,63 +14,90 @@
 
 require __DIR__.'/../vendor/autoload.php';
 
-use Utopia\Platform\Action;
-use Utopia\Proxy\Adapter\HTTP\Swoole as HTTPAdapter;
+use Utopia\Proxy\Resolver;
+use Utopia\Proxy\Resolver\Exception;
+use Utopia\Proxy\Resolver\Result;
 use Utopia\Proxy\Server\HTTP\Swoole as HTTPServer;
-use Utopia\Proxy\Service\HTTP as HTTPService;
 
-// Create HTTP adapter
-$adapter = new HTTPAdapter();
-$service = $adapter->getService() ?? new HTTPService();
+// Simple static mapping of hostnames to backends
+$backends = [
+    'api.example.com' => 'localhost:3000',
+    'app.example.com' => 'localhost:3001',
+    'admin.example.com' => 'localhost:3002',
+];
 
-// Register resolve action - REQUIRED
-// Map hostnames to backend endpoints
-$service->addAction('resolve', (new class () extends Action {})
-    ->callback(function (string $hostname): string {
-        // Simple static mapping
-        $backends = [
-            'api.example.com' => 'localhost:3000',
-            'app.example.com' => 'localhost:3001',
-            'admin.example.com' => 'localhost:3002',
-        ];
+// Create resolver with static backend mapping
+$resolver = new class ($backends) implements Resolver {
+    /** @var array<string, string> */
+    private array $backends;
 
-        if (! isset($backends[$hostname])) {
-            throw new \Exception("No backend configured for hostname: {$hostname}");
+    /** @var array<string, int> */
+    private array $connectionCounts = [];
+
+    public function __construct(array $backends)
+    {
+        $this->backends = $backends;
+    }
+
+    public function resolve(string $resourceId): Result
+    {
+        if (!isset($this->backends[$resourceId])) {
+            throw new Exception(
+                "No backend configured for hostname: {$resourceId}",
+                Exception::NOT_FOUND
+            );
         }
 
-        return $backends[$hostname];
-    }));
+        return new Result(endpoint: $this->backends[$resourceId]);
+    }
 
-// Optional: Add logging
-$service->addAction('logRoute', (new class () extends Action {})
-    ->setType(Action::TYPE_SHUTDOWN)
-    ->callback(function (string $hostname, string $endpoint, $result) {
-        echo sprintf(
-            "[%s] %s -> %s (cached: %s, latency: %sms)\n",
-            date('H:i:s'),
-            $hostname,
-            $endpoint,
-            $result->metadata['cached'] ? 'yes' : 'no',
-            $result->metadata['latency_ms']
-        );
-    }));
+    public function onConnect(string $resourceId, array $metadata = []): void
+    {
+        $this->connectionCounts[$resourceId] = ($this->connectionCounts[$resourceId] ?? 0) + 1;
+    }
 
-$adapter->setService($service);
+    public function onDisconnect(string $resourceId, array $metadata = []): void
+    {
+        if (isset($this->connectionCounts[$resourceId])) {
+            $this->connectionCounts[$resourceId]--;
+        }
+    }
+
+    public function trackActivity(string $resourceId, array $metadata = []): void
+    {
+        // Track activity for cold-start detection
+    }
+
+    public function invalidateCache(string $resourceId): void
+    {
+        // No caching in this simple example
+    }
+
+    public function getStats(): array
+    {
+        return [
+            'resolver' => 'static',
+            'backends' => count($this->backends),
+            'connections' => $this->connectionCounts,
+        ];
+    }
+};
 
 // Create server
 $server = new HTTPServer(
+    $resolver,
     host: '0.0.0.0',
     port: 8080,
-    workers: swoole_cpu_num() * 2,
-    config: ['adapter' => $adapter]
+    workers: swoole_cpu_num() * 2
 );
 
 echo "HTTP Proxy Server\n";
 echo "=================\n";
 echo "Listening on: http://0.0.0.0:8080\n";
 echo "\nConfigured backends:\n";
-echo "  api.example.com -> localhost:3000\n";
-echo "  app.example.com -> localhost:3001\n";
-echo "  admin.example.com -> localhost:3002\n\n";
+foreach ($backends as $hostname => $endpoint) {
+    echo "  {$hostname} -> {$endpoint}\n";
+}
+echo "\n";
 
 $server->start();

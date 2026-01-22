@@ -2,7 +2,7 @@
 
 High-performance, protocol-agnostic proxy built on Swoole for blazing fast connection management across HTTP, TCP, and SMTP protocols.
 
-## 🚀 Performance First
+## Performance First
 
 - **Swoole coroutines**: Handle 100,000+ concurrent connections per server
 - **Connection pooling**: Reuse connections to backend services
@@ -11,16 +11,17 @@ High-performance, protocol-agnostic proxy built on Swoole for blazing fast conne
 - **Async I/O**: Non-blocking operations throughout
 - **Memory efficient**: Shared memory tables for state management
 
-## 🎯 Features
+## Features
 
 - Protocol-agnostic connection management
 - Cold-start detection and triggering
 - Automatic connection queueing during cold-starts
 - Health checking and circuit breakers
 - Built-in telemetry and metrics
+- SSRF validation for security
 - Support for HTTP, TCP (PostgreSQL/MySQL), and SMTP
 
-## 📦 Installation
+## Installation
 
 ### Using Composer
 
@@ -38,37 +39,95 @@ docker-compose up -d
 
 See [DOCKER.md](DOCKER.md) for detailed Docker setup and configuration.
 
-## 🏃 Quick Start
+## Quick Start
 
-The protocol-proxy uses the **Adapter Pattern** - similar to [utopia-php/database](https://github.com/utopia-php/database), [utopia-php/messaging](https://github.com/utopia-php/messaging), and [utopia-php/storage](https://github.com/utopia-php/storage).
+The protocol-proxy uses the **Resolver Pattern** - a platform-agnostic interface for resolving resource identifiers to backend endpoints.
 
-### HTTP Proxy (Basic)
+### Implementing a Resolver
+
+All servers require a `Resolver` implementation that maps resource IDs (hostnames, database IDs, domains) to backend endpoints:
+
+```php
+<?php
+use Utopia\Proxy\Resolver;
+use Utopia\Proxy\Resolver\Result;
+use Utopia\Proxy\Resolver\Exception;
+
+class MyResolver implements Resolver
+{
+    public function resolve(string $resourceId): Result
+    {
+        // Map resource ID to backend endpoint
+        $backends = [
+            'api.example.com' => 'localhost:3000',
+            'app.example.com' => 'localhost:3001',
+        ];
+
+        if (!isset($backends[$resourceId])) {
+            throw new Exception(
+                "No backend for: {$resourceId}",
+                Exception::NOT_FOUND
+            );
+        }
+
+        return new Result(endpoint: $backends[$resourceId]);
+    }
+
+    public function onConnect(string $resourceId, array $metadata = []): void
+    {
+        // Called when a connection is established
+    }
+
+    public function onDisconnect(string $resourceId, array $metadata = []): void
+    {
+        // Called when a connection is closed
+    }
+
+    public function trackActivity(string $resourceId, array $metadata = []): void
+    {
+        // Track activity for cold-start detection
+    }
+
+    public function invalidateCache(string $resourceId): void
+    {
+        // Invalidate cached resolution data
+    }
+
+    public function getStats(): array
+    {
+        return ['resolver' => 'custom'];
+    }
+}
+```
+
+### HTTP Proxy
 
 ```php
 <?php
 require 'vendor/autoload.php';
 
-use Utopia\Platform\Action;
-use Utopia\Proxy\Adapter\HTTP\Swoole as HTTPAdapter;
+use Utopia\Proxy\Resolver;
+use Utopia\Proxy\Resolver\Result;
 use Utopia\Proxy\Server\HTTP\Swoole as HTTPServer;
-use Utopia\Proxy\Service\HTTP as HTTPService;
 
-$adapter = new HTTPAdapter();
-$service = $adapter->getService() ?? new HTTPService();
-
-// Required: Provide backend resolution logic
-$service->addAction('resolve', (new class extends Action {})
-    ->callback(function (string $hostname) use ($backend): string {
-        return $backend->getEndpoint($hostname);
-    }));
-
-$adapter->setService($service);
+// Create resolver (inline example)
+$resolver = new class implements Resolver {
+    public function resolve(string $resourceId): Result
+    {
+        return new Result(endpoint: 'backend:8080');
+    }
+    public function onConnect(string $resourceId, array $metadata = []): void {}
+    public function onDisconnect(string $resourceId, array $metadata = []): void {}
+    public function trackActivity(string $resourceId, array $metadata = []): void {}
+    public function invalidateCache(string $resourceId): void {}
+    public function getStats(): array { return []; }
+};
 
 $server = new HTTPServer(
+    $resolver,
     host: '0.0.0.0',
     port: 80,
-    workers: swoole_cpu_num() * 2,
-    config: ['adapter' => $adapter]
+    workers: swoole_cpu_num() * 2
 );
 
 $server->start();
@@ -80,9 +139,25 @@ $server->start();
 <?php
 require 'vendor/autoload.php';
 
+use Utopia\Proxy\Resolver;
+use Utopia\Proxy\Resolver\Result;
 use Utopia\Proxy\Server\TCP\Swoole as TCPServer;
 
+$resolver = new class implements Resolver {
+    public function resolve(string $resourceId): Result
+    {
+        // resourceId is the database name from connection
+        return new Result(endpoint: 'postgres:5432');
+    }
+    public function onConnect(string $resourceId, array $metadata = []): void {}
+    public function onDisconnect(string $resourceId, array $metadata = []): void {}
+    public function trackActivity(string $resourceId, array $metadata = []): void {}
+    public function invalidateCache(string $resourceId): void {}
+    public function getStats(): array { return []; }
+};
+
 $server = new TCPServer(
+    $resolver,
     host: '0.0.0.0',
     ports: [5432, 3306], // PostgreSQL, MySQL
     workers: swoole_cpu_num() * 2
@@ -97,9 +172,25 @@ $server->start();
 <?php
 require 'vendor/autoload.php';
 
+use Utopia\Proxy\Resolver;
+use Utopia\Proxy\Resolver\Result;
 use Utopia\Proxy\Server\SMTP\Swoole as SMTPServer;
 
+$resolver = new class implements Resolver {
+    public function resolve(string $resourceId): Result
+    {
+        // resourceId is the domain from EHLO/HELO
+        return new Result(endpoint: 'mailserver:25');
+    }
+    public function onConnect(string $resourceId, array $metadata = []): void {}
+    public function onDisconnect(string $resourceId, array $metadata = []): void {}
+    public function trackActivity(string $resourceId, array $metadata = []): void {}
+    public function invalidateCache(string $resourceId): void {}
+    public function getStats(): array { return []; }
+};
+
 $server = new SMTPServer(
+    $resolver,
     host: '0.0.0.0',
     port: 25,
     workers: swoole_cpu_num() * 2
@@ -108,38 +199,36 @@ $server = new SMTPServer(
 $server->start();
 ```
 
-## 🔧 Configuration
+## Configuration
 
 ```php
 <?php
 $config = [
-    'host' => '0.0.0.0',
-    'port' => 80,
-    'workers' => 16,
-
     // Performance tuning
-    'max_connections' => 100000,
-    'max_coroutine' => 100000,
-    'socket_buffer_size' => 2 * 1024 * 1024, // 2MB
-    'buffer_output_size' => 2 * 1024 * 1024, // 2MB
+    'max_connections' => 100_000,
+    'max_coroutine' => 100_000,
+    'socket_buffer_size' => 8 * 1024 * 1024, // 8MB
+    'buffer_output_size' => 8 * 1024 * 1024, // 8MB
+    'log_level' => SWOOLE_LOG_ERROR,
 
-    // Routing cache
-    'cache_ttl' => 1, // 1 second
+    // HTTP-specific
+    'backend_pool_size' => 2048,
+    'telemetry_headers' => true,
+    'fast_path' => true,
+    'open_http2_protocol' => false,
 
-    // Database connection (for cache and resolution actions)
-    'db_host' => 'localhost',
-    'db_port' => 3306,
-    'db_user' => 'appwrite',
-    'db_pass' => 'password',
-    'db_name' => 'appwrite',
+    // Cold-start settings
+    'cold_start_timeout' => 30_000, // 30 seconds
+    'health_check_interval' => 100, // 100ms
 
-    // Redis cache
-    'redis_host' => '127.0.0.1',
-    'redis_port' => 6379,
+    // Security
+    'skip_validation' => false, // Enable SSRF protection
 ];
+
+$server = new HTTPServer($resolver, '0.0.0.0', 80, 16, $config);
 ```
 
-## ✅ Testing
+## Testing
 
 ```bash
 composer test
@@ -157,9 +246,9 @@ Coverage (requires Xdebug or PCOV):
 vendor/bin/phpunit --coverage-text
 ```
 
-## 🎨 Architecture
+## Architecture
 
-The protocol-proxy follows the **Adapter Pattern** used throughout utopia-php libraries (Database, Messaging, Storage), providing a clean and extensible architecture for protocol-specific implementations.
+The protocol-proxy uses the **Resolver Pattern** for platform-agnostic backend resolution, combined with protocol-specific adapters for optimized handling.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -183,65 +272,75 @@ The protocol-proxy follows the **Adapter Pattern** used throughout utopia-php li
 │           └─────────────┴─────────────┘                          │
 │                         │                                        │
 │                ┌────────▼────────┐                               │
-│                │     Adapter     │                               │
-│                │   (Abstract)    │                               │
+│                │    Resolver     │                               │
+│                │   (Interface)   │                               │
 │                └────────┬────────┘                               │
 │                         │                                        │
 │         ┌───────────────┼───────────────┐                        │
 │         │               │               │                        │
 │    ┌────▼────┐     ┌────▼────┐    ┌────▼────┐                  │
-│    │  Cache  │     │ Database│    │ Compute │                  │
-│    │  Layer  │     │  Pool   │    │   API   │                  │
+│    │ Routing │     │Lifecycle│    │  Stats  │                  │
+│    │  Cache  │     │ Hooks   │    │ & Logs  │                  │
 │    └─────────┘     └─────────┘    └─────────┘                  │
 │                                                                   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Adapter Pattern
+### Resolver Interface
 
-Following the design principles of utopia-php libraries:
+The `Resolver` interface is the core abstraction point:
 
-- **Abstract Base**: `Adapter` class defines core proxy behavior
-  - Connection handling and routing
-  - Cold-start detection and triggering
-  - Caching and performance optimization
+```php
+interface Resolver
+{
+    // Map resource ID to backend endpoint
+    public function resolve(string $resourceId): Result;
 
-- **Protocol-Specific Adapters**:
-  - `HTTP` - Routes HTTP requests based on hostname
-  - `TCP` - Routes TCP connections (PostgreSQL/MySQL) based on SNI
-  - `SMTP` - Routes SMTP connections based on email domain
+    // Lifecycle hooks
+    public function onConnect(string $resourceId, array $metadata = []): void;
+    public function onDisconnect(string $resourceId, array $metadata = []): void;
 
-This pattern enables:
-- Easy addition of new protocols
-- Protocol-specific optimizations
-- Consistent interface across all proxy types
-- Shared infrastructure (caching, pooling, metrics)
+    // Activity tracking for cold-start detection
+    public function trackActivity(string $resourceId, array $metadata = []): void;
 
-## 📊 Performance Benchmarks
+    // Cache management
+    public function invalidateCache(string $resourceId): void;
 
-```
-HTTP Proxy:
-- Requests/sec: 250,000+
-- Latency p50: <1ms
-- Latency p99: <5ms
-- Connections: 100,000+ concurrent
-
-TCP Proxy:
-- Connections/sec: 100,000+
-- Throughput: 10GB/s+
-- Latency: <1ms forwarding overhead
-
-SMTP Proxy:
-- Messages/sec: 50,000+
-- Concurrent connections: 50,000+
+    // Statistics
+    public function getStats(): array;
+}
 ```
 
-## 🧪 Testing
+### Resolution Result
 
-```bash
-composer test
+The `Result` class contains the resolved backend endpoint:
+
+```php
+new Result(
+    endpoint: 'host:port',      // Required: backend endpoint
+    metadata: ['key' => 'val'], // Optional: additional data
+    timeout: 30                 // Optional: connection timeout override
+);
 ```
 
-## 📝 License
+### Resolution Exceptions
+
+Use `Resolver\Exception` with appropriate error codes:
+
+```php
+throw new Exception('Not found', Exception::NOT_FOUND);    // 404
+throw new Exception('Unavailable', Exception::UNAVAILABLE); // 503
+throw new Exception('Timeout', Exception::TIMEOUT);         // 504
+throw new Exception('Forbidden', Exception::FORBIDDEN);     // 403
+throw new Exception('Error', Exception::INTERNAL);          // 500
+```
+
+### Protocol-Specific Adapters
+
+- **HTTP** - Routes requests based on `Host` header
+- **TCP** - Routes connections based on database name from PostgreSQL/MySQL protocol
+- **SMTP** - Routes connections based on domain from EHLO/HELO command
+
+## License
 
 BSD-3-Clause

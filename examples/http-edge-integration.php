@@ -4,9 +4,9 @@
  * Example: Integrating Appwrite Edge with Protocol Proxy
  *
  * This example shows how Appwrite Edge can use the protocol-proxy
- * with custom actions to inject business logic like:
+ * with a custom Resolver to inject business logic like:
  * - Rule caching and resolution
- * - JWT authentication
+ * - Domain validation
  * - Runtime resolution
  * - Logging and telemetry
  *
@@ -16,111 +16,150 @@
 
 require __DIR__.'/../vendor/autoload.php';
 
-use Utopia\Platform\Action;
-use Utopia\Proxy\Adapter\HTTP\Swoole as HTTPAdapter;
+use Utopia\Proxy\Resolver;
+use Utopia\Proxy\Resolver\Exception;
+use Utopia\Proxy\Resolver\Result;
 use Utopia\Proxy\Server\HTTP\Swoole as HTTPServer;
-use Utopia\Proxy\Service\HTTP as HTTPService;
 
-// Create HTTP adapter
-$adapter = new HTTPAdapter();
-$service = $adapter->getService() ?? new HTTPService();
+/**
+ * Edge Resolver - Custom resolver for Appwrite Edge integration
+ *
+ * Demonstrates how to implement a full-featured resolver with:
+ * - Domain validation
+ * - Kubernetes service discovery
+ * - Connection lifecycle tracking
+ * - Statistics and telemetry
+ */
+$resolver = new class implements Resolver {
+    /** @var array<string, int> */
+    private array $connectionCounts = [];
 
-// Action: Resolve backend endpoint (REQUIRED)
-// This is where Appwrite Edge provides the backend resolution logic
-$service->addAction('resolve', (new class () extends Action {})
-    ->callback(function (string $hostname): string {
-        echo "[Action] Resolving backend for: {$hostname}\n";
+    /** @var array<string, float> */
+    private array $lastActivity = [];
+
+    /** @var int */
+    private int $totalRequests = 0;
+
+    /** @var int */
+    private int $totalErrors = 0;
+
+    public function resolve(string $resourceId): Result
+    {
+        $this->totalRequests++;
+
+        echo "[Resolver] Resolving backend for: {$resourceId}\n";
+
+        // Validate domain format
+        if (!preg_match('/^[a-z0-9-]+\.appwrite\.network$/', $resourceId)) {
+            $this->totalErrors++;
+            throw new Exception(
+                "Invalid hostname format: {$resourceId}",
+                Exception::FORBIDDEN
+            );
+        }
 
         // Example resolution strategies:
 
         // Option 1: Kubernetes service discovery (recommended for Edge)
         // Extract runtime info and return K8s service
-        if (preg_match('/^func-([a-z0-9]+)\.appwrite\.network$/', $hostname, $matches)) {
+        if (preg_match('/^func-([a-z0-9]+)\.appwrite\.network$/', $resourceId, $matches)) {
             $functionId = $matches[1];
+            $endpoint = "runtime-{$functionId}.runtimes.svc.cluster.local:8080";
 
-            // Edge would query its runtime registry here
-            return "runtime-{$functionId}.runtimes.svc.cluster.local:8080";
+            echo "[Resolver] Resolved to K8s service: {$endpoint}\n";
+
+            return new Result(
+                endpoint: $endpoint,
+                metadata: [
+                    'type' => 'function',
+                    'function_id' => $functionId,
+                ]
+            );
         }
 
         // Option 2: Query database (traditional approach)
-        // $doc = $db->findOne('functions', [Query::equal('hostname', [$hostname])]);
-        // return $doc->getAttribute('endpoint');
+        // $doc = $db->findOne('functions', [Query::equal('hostname', [$resourceId])]);
+        // return new Result(endpoint: $doc->getAttribute('endpoint'));
 
         // Option 3: Query external API (Cloud Platform API)
-        // $runtime = $edgeApi->getRuntime($hostname);
-        // return $runtime['endpoint'];
+        // $runtime = $edgeApi->getRuntime($resourceId);
+        // return new Result(endpoint: $runtime['endpoint']);
 
         // Option 4: Redis cache + fallback
-        // $endpoint = $redis->get("endpoint:{$hostname}");
+        // $endpoint = $redis->get("endpoint:{$resourceId}");
         // if (!$endpoint) {
-        //     $endpoint = $api->resolve($hostname);
-        //     $redis->setex("endpoint:{$hostname}", 60, $endpoint);
+        //     $endpoint = $api->resolve($resourceId);
+        //     $redis->setex("endpoint:{$resourceId}", 60, $endpoint);
         // }
-        // return $endpoint;
+        // return new Result(endpoint: $endpoint);
 
-        throw new \Exception("No backend found for hostname: {$hostname}");
-    }));
+        $this->totalErrors++;
+        throw new Exception(
+            "No backend found for hostname: {$resourceId}",
+            Exception::NOT_FOUND
+        );
+    }
 
-// Action 1: Before routing - Validate domain and extract project/deployment info
-$service->addAction('beforeRoute', (new class () extends Action {})
-    ->setType(Action::TYPE_INIT)
-    ->callback(function (string $hostname) {
-        echo "[Action] Before routing for: {$hostname}\n";
+    public function onConnect(string $resourceId, array $metadata = []): void
+    {
+        $this->connectionCounts[$resourceId] = ($this->connectionCounts[$resourceId] ?? 0) + 1;
+        $this->lastActivity[$resourceId] = microtime(true);
 
-        // Example: Edge could validate domain format here
-        if (! preg_match('/^[a-z0-9-]+\.appwrite\.network$/', $hostname)) {
-            throw new \Exception("Invalid hostname format: {$hostname}");
+        echo "[Resolver] Connection opened for: {$resourceId} (active: {$this->connectionCounts[$resourceId]})\n";
+    }
+
+    public function onDisconnect(string $resourceId, array $metadata = []): void
+    {
+        if (isset($this->connectionCounts[$resourceId])) {
+            $this->connectionCounts[$resourceId]--;
         }
-    }));
 
-// Action 2: After routing - Log successful routes and cache rule data
-$service->addAction('afterRoute', (new class () extends Action {})
-    ->setType(Action::TYPE_SHUTDOWN)
-    ->callback(function (string $hostname, string $endpoint, $result) {
-        echo "[Action] Routed {$hostname} -> {$endpoint}\n";
-        echo '[Action] Cache: '.($result->metadata['cached'] ? 'HIT' : 'MISS')."\n";
-        echo "[Action] Latency: {$result->metadata['latency_ms']}ms\n";
+        echo "[Resolver] Connection closed for: {$resourceId}\n";
 
-        // Example: Edge could:
-        // - Log to telemetry
-        // - Update metrics
-        // - Cache rule/runtime data
-        // - Add custom headers to response
-    }));
+        // Example: Log to telemetry, update metrics
+    }
 
-// Action 3: On routing error - Log errors and provide custom error handling
-$service->addAction('onRoutingError', (new class () extends Action {})
-    ->setType(Action::TYPE_ERROR)
-    ->callback(function (string $hostname, \Exception $e) {
-        echo "[Action] Routing error for {$hostname}: {$e->getMessage()}\n";
+    public function trackActivity(string $resourceId, array $metadata = []): void
+    {
+        $this->lastActivity[$resourceId] = microtime(true);
 
-        // Example: Edge could:
-        // - Log to Sentry
-        // - Return custom error pages
-        // - Trigger alerts
-        // - Fallback to different region
-    }));
+        // Example: Update activity metrics for cold-start detection
+    }
 
-$adapter->setService($service);
+    public function invalidateCache(string $resourceId): void
+    {
+        echo "[Resolver] Cache invalidated for: {$resourceId}\n";
 
-// Create server with custom adapter
+        // Example: Clear Redis cache, notify other workers
+    }
+
+    public function getStats(): array
+    {
+        return [
+            'resolver' => 'edge',
+            'total_requests' => $this->totalRequests,
+            'total_errors' => $this->totalErrors,
+            'active_connections' => array_sum($this->connectionCounts),
+            'connections_by_host' => $this->connectionCounts,
+        ];
+    }
+};
+
+// Create server with custom resolver
 $server = new HTTPServer(
+    $resolver,
     host: '0.0.0.0',
     port: 8080,
-    workers: swoole_cpu_num() * 2,
-    config: [
-        // Pass the configured adapter to workers
-        'adapter_factory' => fn () => $adapter,
-    ]
+    workers: swoole_cpu_num() * 2
 );
 
 echo "Edge-integrated HTTP Proxy Server\n";
 echo "==================================\n";
 echo "Listening on: http://0.0.0.0:8080\n";
-echo "\nActions registered:\n";
-echo "- resolve: K8s service discovery\n";
-echo "- beforeRoute: Domain validation\n";
-echo "- afterRoute: Logging and telemetry\n";
-echo "- onRoutingError: Error handling\n\n";
+echo "\nResolver features:\n";
+echo "- resolve: K8s service discovery with domain validation\n";
+echo "- onConnect/onDisconnect: Connection lifecycle tracking\n";
+echo "- trackActivity: Activity metrics for cold-start detection\n";
+echo "- getStats: Statistics and telemetry\n\n";
 
 $server->start();
