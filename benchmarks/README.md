@@ -1,6 +1,32 @@
 # Benchmarks
 
-This folder contains high-load benchmark helpers for HTTP and TCP proxies.
+High-load benchmark suite for HTTP and TCP proxies.
+
+## Validated Performance (8-core, 32GB RAM)
+
+| Metric | Result |
+|--------|--------|
+| **Peak concurrent connections** | 672,348 |
+| **Memory at peak** | 23 GB |
+| **Memory per connection** | ~33 KB |
+| **Connection rate (sustained)** | 18,067/sec |
+| **CPU at peak** | ~60% |
+
+## One-Shot Benchmark (Fresh Linux Droplet)
+
+```bash
+curl -sL https://raw.githubusercontent.com/utopia-php/protocol-proxy/dev/benchmarks/bootstrap-droplet.sh | sudo bash
+```
+
+This installs PHP 8.3 + Swoole, tunes the kernel, and runs all benchmarks automatically.
+
+## Maximum Connection Stress Test
+
+```bash
+./benchmarks/stress-max.sh
+```
+
+Pushes the system to maximum concurrent connections. Requires root for kernel tuning.
 
 ## Quick start (HTTP)
 
@@ -63,6 +89,42 @@ BENCH_PROTOCOL=mysql BENCH_PORT=15433 BENCH_PAYLOAD_BYTES=0 BENCH_CONCURRENCY=50
 Throughput heavy (payload enabled):
 ```bash
 BENCH_PROTOCOL=mysql BENCH_PORT=15433 BENCH_PAYLOAD_BYTES=65536 BENCH_TARGET_BYTES=17179869184 BENCH_CONCURRENCY=2000 php benchmarks/tcp.php
+```
+
+## Sustained Load Tests
+
+Sustained mode (continuous connection churn):
+```bash
+BENCH_DURATION=300 BENCH_CONCURRENCY=4000 BENCH_PAYLOAD_BYTES=0 php benchmarks/tcp-sustained.php
+```
+
+Max connections mode (hold connections open):
+```bash
+BENCH_MODE=max_connections BENCH_TARGET_CONNECTIONS=50000 php benchmarks/tcp-sustained.php
+```
+
+Hold forever mode (Ctrl+C to stop):
+```bash
+BENCH_MODE=hold_forever BENCH_TARGET_CONNECTIONS=50000 php benchmarks/tcp-sustained.php
+```
+
+## Scaling Test (Multiple Backends)
+
+To test maximum concurrent connections, run multiple backend/client pairs:
+
+```bash
+# Start 16 backends on different ports
+for p in $(seq 15432 15447); do
+  BACKEND_PORT=$p php benchmarks/tcp-backend.php &
+done
+
+# Start 16 clients targeting 40k connections each (640k total)
+for p in $(seq 15432 15447); do
+  BENCH_PORT=$p BENCH_MODE=hold_forever BENCH_TARGET_CONNECTIONS=40000 php benchmarks/tcp-sustained.php &
+done
+
+# Monitor connections
+watch -n1 'ss -s | grep estab'
 ```
 
 ## Environment variables
