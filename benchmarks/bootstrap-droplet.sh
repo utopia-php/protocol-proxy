@@ -64,31 +64,41 @@ echo "[2/6] Installing Swoole..."
 if php -m 2>/dev/null | grep -q swoole; then
     echo "  - Swoole already installed"
 else
-    # Install Swoole via pecl (auto-answer prompts: sockets=yes, openssl=yes, others=no)
-    printf "yes\nyes\nno\nno\nno\n" | pecl install swoole > /dev/null 2>&1 || {
-        # Fallback: try without prompts
-        pecl install -f swoole < /dev/null > /dev/null 2>&1 || true
-    }
-
-    # Enable the extension
-    PHP_CONF_DIR=$(php -i 2>/dev/null | grep "Scan this dir" | cut -d'>' -f2 | tr -d ' ')
-    if [ -n "$PHP_CONF_DIR" ] && [ -d "$PHP_CONF_DIR" ]; then
-        echo "extension=swoole.so" > "$PHP_CONF_DIR/20-swoole.ini"
-    else
-        # Fallback locations
-        echo "extension=swoole.so" > /etc/php/8.3/cli/conf.d/20-swoole.ini 2>/dev/null || \
-        echo "extension=swoole.so" > /etc/php/8.2/cli/conf.d/20-swoole.ini 2>/dev/null || \
-        echo "extension=swoole.so" >> /etc/php.ini 2>/dev/null || true
-    fi
+    case "$OS" in
+        ubuntu|debian)
+            # Use pre-built package from ondrej PPA (much more reliable than PECL)
+            apt-get install -y -qq php8.3-swoole > /dev/null 2>&1 || {
+                echo "  - apt package failed, trying PECL..."
+                # Fallback to PECL
+                printf "yes\nyes\nno\nno\nno\n" | pecl install swoole > /dev/null 2>&1 || \
+                    pecl install -f swoole < /dev/null > /dev/null 2>&1 || true
+                PHP_CONF_DIR=$(php -i 2>/dev/null | grep "Scan this dir" | cut -d'>' -f2 | tr -d ' ')
+                if [ -n "$PHP_CONF_DIR" ] && [ -d "$PHP_CONF_DIR" ]; then
+                    echo "extension=swoole.so" > "$PHP_CONF_DIR/20-swoole.ini"
+                fi
+            }
+            ;;
+        *)
+            # PECL for other distros
+            printf "yes\nyes\nno\nno\nno\n" | pecl install swoole > /dev/null 2>&1 || \
+                pecl install -f swoole < /dev/null > /dev/null 2>&1 || true
+            PHP_CONF_DIR=$(php -i 2>/dev/null | grep "Scan this dir" | cut -d'>' -f2 | tr -d ' ')
+            if [ -n "$PHP_CONF_DIR" ] && [ -d "$PHP_CONF_DIR" ]; then
+                echo "extension=swoole.so" > "$PHP_CONF_DIR/20-swoole.ini"
+            fi
+            ;;
+    esac
     echo "  - Swoole installed"
 fi
 
 # Verify Swoole
 if ! php -m 2>/dev/null | grep -q swoole; then
     echo "Error: Swoole not loaded."
-    echo "Debug: Checking extension..."
-    php -i | grep -i swoole || echo "  (not found in php -i)"
-    ls -la /usr/lib/php/*/swoole.so 2>/dev/null || echo "  (swoole.so not found)"
+    echo ""
+    echo "Manual fix:"
+    echo "  apt-get install php8.3-swoole"
+    echo ""
+    echo "Then re-run this script."
     exit 1
 fi
 
