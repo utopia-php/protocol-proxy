@@ -14,8 +14,11 @@
  *   # 30 minute soak test
  *   BENCH_DURATION=1800 BENCH_CONCURRENCY=2000 php benchmarks/tcp-sustained.php
  *
- *   # Max connections test (hold connections open)
+ *   # Max connections test (hold connections open for 30s)
  *   BENCH_MODE=max_connections BENCH_TARGET_CONNECTIONS=50000 php benchmarks/tcp-sustained.php
+ *
+ *   # Hold forever test (Ctrl+C to stop)
+ *   BENCH_MODE=hold_forever BENCH_TARGET_CONNECTIONS=50000 php benchmarks/tcp-sustained.php
  */
 
 use Swoole\Coroutine;
@@ -38,7 +41,7 @@ Co\run(function () {
     $host = getenv('BENCH_HOST') ?: '127.0.0.1';
     $port = $envInt('BENCH_PORT', 5432);
     $protocol = strtolower(getenv('BENCH_PROTOCOL') ?: ($port === 5432 ? 'postgres' : 'mysql'));
-    $mode = getenv('BENCH_MODE') ?: 'sustained'; // sustained, max_connections
+    $mode = getenv('BENCH_MODE') ?: 'sustained'; // sustained, max_connections, hold_forever
     $duration = $envInt('BENCH_DURATION', 60); // seconds
     $concurrency = $envInt('BENCH_CONCURRENCY', 1000);
     $targetConnections = $envInt('BENCH_TARGET_CONNECTIONS', 50000);
@@ -160,9 +163,13 @@ Co\run(function () {
         }
     });
 
-    if ($mode === 'max_connections') {
+    if ($mode === 'max_connections' || $mode === 'hold_forever') {
         // Max connections test: open connections and hold them
-        echo "Opening {$targetConnections} connections...\n\n";
+        echo "Opening {$targetConnections} connections...\n";
+        if ($mode === 'hold_forever') {
+            echo "(Hold forever mode - Ctrl+C to stop)\n";
+        }
+        echo "\n";
 
         $clients = [];
         $batchSize = 1000;
@@ -233,10 +240,16 @@ Co\run(function () {
         echo "Errors: {$stats['errors']->get()}\n";
 
         // Hold for observation
-        echo "\nHolding connections for 30 seconds...\n";
-        Coroutine::sleep(30);
-
-        $running->set(0);
+        if ($mode === 'hold_forever') {
+            echo "\nHolding connections indefinitely (Ctrl+C to stop)...\n";
+            while ($running->get() === 1) {
+                Coroutine::sleep(60);
+            }
+        } else {
+            echo "\nHolding connections for 30 seconds...\n";
+            Coroutine::sleep(30);
+            $running->set(0);
+        }
 
     } else {
         // Sustained load test: continuous requests

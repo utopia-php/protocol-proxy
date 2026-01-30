@@ -88,9 +88,9 @@ echo "[4/4] Starting ${NUM_BACKENDS} benchmark clients..."
 for i in $(seq 0 $((NUM_BACKENDS - 1))); do
     port=$((BASE_PORT + i))
     BENCH_PORT=$port \
-    BENCH_MODE=max_connections \
+    BENCH_MODE=hold_forever \
     BENCH_TARGET_CONNECTIONS=$CONNECTIONS_PER_CLIENT \
-    BENCH_REPORT_INTERVAL=60 \
+    BENCH_REPORT_INTERVAL=9999 \
     php benchmarks/tcp-sustained.php > /dev/null 2>&1 &
 done
 
