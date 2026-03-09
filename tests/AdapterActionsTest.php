@@ -27,9 +27,9 @@ class AdapterActionsTest extends TestCase
         $tcp = new TCPAdapter($this->resolver, port: 5432);
         $smtp = new SMTPAdapter($this->resolver);
 
-        $this->assertSame($this->resolver, $http->getResolver());
-        $this->assertSame($this->resolver, $tcp->getResolver());
-        $this->assertSame($this->resolver, $smtp->getResolver());
+        $this->assertSame($this->resolver, $http->resolver);
+        $this->assertSame($this->resolver, $tcp->resolver);
+        $this->assertSame($this->resolver, $smtp->resolver);
     }
 
     public function test_resolve_routes_and_returns_endpoint(): void

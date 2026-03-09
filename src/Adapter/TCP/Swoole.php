@@ -38,7 +38,11 @@ class Swoole extends Adapter
 
     public function __construct(
         Resolver $resolver,
-        protected int $port
+        public int $port {
+            get {
+                return $this->port;
+            }
+        }
     ) {
         parent::__construct($resolver);
     }
@@ -78,14 +82,6 @@ class Swoole extends Adapter
     }
 
     /**
-     * Get listening port
-     */
-    public function getPort(): int
-    {
-        return $this->port;
-    }
-
-    /**
      * Parse database ID from TCP packet
      *
      * For PostgreSQL: Extract from SNI or startup message
@@ -113,7 +109,7 @@ class Swoole extends Adapter
     {
         // Fast path: find "database\0" marker
         $marker = "database\x00";
-        $pos = strpos($data, $marker);
+        $pos = \strpos($data, $marker);
         if ($pos === false) {
             throw new \Exception('Invalid PostgreSQL database name');
         }
@@ -134,7 +130,7 @@ class Swoole extends Adapter
 
         // Extract ID (alphanumeric after "db-", stop at dot or end)
         $idStart = 3;
-        $len = strlen($dbName);
+        $len = \strlen($dbName);
         $idEnd = $idStart;
 
         while ($idEnd < $len) {
@@ -154,7 +150,7 @@ class Swoole extends Adapter
             throw new \Exception('Invalid PostgreSQL database name');
         }
 
-        return substr($dbName, $idStart, $idEnd - $idStart);
+        return \substr($dbName, $idStart, $idEnd - $idStart);
     }
 
     /**
@@ -168,25 +164,25 @@ class Swoole extends Adapter
     {
         // MySQL COM_INIT_DB packet (0x02)
         $len = strlen($data);
-        if ($len <= 5 || ord($data[4]) !== 0x02) {
+        if ($len <= 5 || \ord($data[4]) !== 0x02) {
             throw new \Exception('Invalid MySQL database name');
         }
 
         // Extract database name, removing null terminator
-        $dbName = substr($data, 5);
-        $nullPos = strpos($dbName, "\x00");
+        $dbName = \substr($data, 5);
+        $nullPos = \strpos($dbName, "\x00");
         if ($nullPos !== false) {
-            $dbName = substr($dbName, 0, $nullPos);
+            $dbName = \substr($dbName, 0, $nullPos);
         }
 
         // Must start with "db-"
-        if (strncmp($dbName, 'db-', 3) !== 0) {
+        if (\strncmp($dbName, 'db-', 3) !== 0) {
             throw new \Exception('Invalid MySQL database name');
         }
 
         // Extract ID (alphanumeric after "db-", stop at dot or end)
         $idStart = 3;
-        $nameLen = strlen($dbName);
+        $nameLen = \strlen($dbName);
         $idEnd = $idStart;
 
         while ($idEnd < $nameLen) {
@@ -206,7 +202,7 @@ class Swoole extends Adapter
             throw new \Exception('Invalid MySQL database name');
         }
 
-        return substr($dbName, $idStart, $idEnd - $idStart);
+        return \substr($dbName, $idStart, $idEnd - $idStart);
     }
 
     /**
@@ -229,7 +225,7 @@ class Swoole extends Adapter
         $result = $this->route($databaseId);
 
         // Create new TCP connection to backend
-        [$host, $port] = explode(':', $result->endpoint.':'.$this->port);
+        [$host, $port] = \explode(':', $result->endpoint.':'.$this->port);
         $port = (int) $port;
 
         $client = new Client(SWOOLE_SOCK_TCP);
@@ -242,7 +238,7 @@ class Swoole extends Adapter
             'socket_buffer_size' => 2 * 1024 * 1024, // 2MB buffer
         ]);
 
-        if (! $client->connect($host, $port, $this->connectTimeout)) {
+        if (!$client->connect($host, $port, $this->connectTimeout)) {
             throw new \Exception("Failed to connect to backend: {$host}:{$port}");
         }
 

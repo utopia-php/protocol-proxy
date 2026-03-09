@@ -33,17 +33,13 @@ abstract class Adapter
     protected array $lastActivityUpdate = [];
 
     public function __construct(
-        protected Resolver $resolver
+        public Resolver $resolver {
+            get {
+                return $this->resolver;
+            }
+        }
     ) {
         $this->initRoutingTable();
-    }
-
-    /**
-     * Get the resolver
-     */
-    public function getResolver(): Resolver
-    {
-        return $this->resolver;
     }
 
     /**
@@ -134,15 +130,18 @@ abstract class Adapter
         $cached = $this->routingTable->get($resourceId);
         $now = \time();
 
-        if ($cached !== false && is_array($cached) && ($now - (int) $cached['updated']) < 1) {
-            $this->stats['cache_hits']++;
-            $this->stats['connections']++;
+        if ($cached !== false && is_array($cached)) {
+            /** @var array{endpoint: string, updated: int} $cached */
+            if (($now - $cached['updated']) < 1) {
+                $this->stats['cache_hits']++;
+                $this->stats['connections']++;
 
-            return new ConnectionResult(
-                endpoint: (string) $cached['endpoint'],
-                protocol: $this->getProtocol(),
-                metadata: ['cached' => true]
-            );
+                return new ConnectionResult(
+                    endpoint: $cached['endpoint'],
+                    protocol: $this->getProtocol(),
+                    metadata: ['cached' => true]
+                );
+            }
         }
 
         $this->stats['cache_misses']++;
@@ -185,8 +184,8 @@ abstract class Adapter
      */
     protected function validateEndpoint(string $endpoint): void
     {
-        $parts = explode(':', $endpoint);
-        if (count($parts) > 2) {
+        $parts = \explode(':', $endpoint);
+        if (\count($parts) > 2) {
             throw new ResolverException("Invalid endpoint format: {$endpoint}");
         }
 
@@ -197,13 +196,13 @@ abstract class Adapter
             throw new ResolverException("Invalid port number: {$port}");
         }
 
-        $ip = gethostbyname($host);
-        if ($ip === $host && ! filter_var($ip, FILTER_VALIDATE_IP)) {
+        $ip = \gethostbyname($host);
+        if ($ip === $host && ! \filter_var($ip, FILTER_VALIDATE_IP)) {
             throw new ResolverException("Cannot resolve hostname: {$host}");
         }
 
-        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
-            $longIp = ip2long($ip);
+        if (\filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+            $longIp = \ip2long($ip);
             if ($longIp === false) {
                 throw new ResolverException("Invalid IP address: {$ip}");
             }
@@ -220,14 +219,14 @@ abstract class Adapter
             ];
 
             foreach ($blockedRanges as [$rangeStart, $rangeEnd]) {
-                $rangeStartLong = ip2long($rangeStart);
-                $rangeEndLong = ip2long($rangeEnd);
+                $rangeStartLong = \ip2long($rangeStart);
+                $rangeEndLong = \ip2long($rangeEnd);
                 if ($longIp >= $rangeStartLong && $longIp <= $rangeEndLong) {
                     throw new ResolverException("Access to private/reserved IP address is forbidden: {$ip}");
                 }
             }
-        } elseif (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
-            if ($ip === '::1' || strpos($ip, 'fe80:') === 0 || strpos($ip, 'fc00:') === 0 || strpos($ip, 'fd00:') === 0) {
+        } elseif (\filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+            if ($ip === '::1' || \str_starts_with($ip, 'fe80:') || \str_starts_with($ip, 'fc00:') || \str_starts_with($ip, 'fd00:')) {
                 throw new ResolverException("Access to private/reserved IPv6 address is forbidden: {$ip}");
             }
         }
@@ -238,7 +237,7 @@ abstract class Adapter
      */
     protected function initRoutingTable(): void
     {
-        $this->routingTable = new Table(100_000);
+        $this->routingTable = new Table(1_000_000);
         $this->routingTable->column('endpoint', Table::TYPE_STRING, 64);
         $this->routingTable->column('updated', Table::TYPE_INT, 8);
         $this->routingTable->create();

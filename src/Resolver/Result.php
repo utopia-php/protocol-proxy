@@ -5,7 +5,7 @@ namespace Utopia\Proxy\Resolver;
 /**
  * Result of resource resolution
  */
-class Result
+readonly class Result
 {
     /**
      * @param  string  $endpoint  Backend endpoint in format "host:port"
@@ -13,9 +13,9 @@ class Result
      * @param  int|null  $timeout  Optional connection timeout override in seconds
      */
     public function __construct(
-        public readonly string $endpoint,
-        public readonly array $metadata = [],
-        public readonly ?int $timeout = null
+        public string $endpoint,
+        public array  $metadata = [],
+        public ?int   $timeout = null
     ) {
     }
 }
