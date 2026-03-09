@@ -27,57 +27,22 @@ class SwooleCoroutine
     /** @var array<int, TCPAdapter> */
     protected array $adapters = [];
 
-    /** @var array<string, mixed> */
-    protected array $config;
+    /** @var array<int, CoroutineServer> */
+    protected array $servers = [];
 
-    /** @var array<int, int> */
-    protected array $ports;
+    /** @var array<int, TCPAdapter> */
+    protected array $adapters = [];
 
-    /** @var int Recv buffer size for forwarding - larger = fewer syscalls */
-    protected int $recvBufferSize = 131072; // 128KB
+    protected SwooleCoroutineConfig $config;
 
-    /**
-     * @param  array<int, int>  $ports
-     * @param  array<string, mixed>  $config
-     */
     public function __construct(
         protected Resolver $resolver,
-        string $host = '0.0.0.0',
-        array $ports = [5432, 3306], // PostgreSQL, MySQL
-        int $workers = 16,
-        array $config = []
+        ?SwooleCoroutineConfig $config = null,
     ) {
-        $this->ports = $ports;
-        $this->config = array_merge([
-            'host' => $host,
-            'workers' => $workers,
-            'max_connections' => 200000,
-            'max_coroutine' => 200000,
-            'socket_buffer_size' => 16 * 1024 * 1024, // 16MB for database traffic
-            'buffer_output_size' => 16 * 1024 * 1024,
-            'reactor_num' => swoole_cpu_num() * 2,
-            'dispatch_mode' => 2, // Fixed dispatch for connection affinity
-            'enable_reuse_port' => true,
-            'backlog' => 65535,
-            'package_max_length' => 32 * 1024 * 1024, // 32MB max query/result
-            'tcp_keepidle' => 30,
-            'tcp_keepinterval' => 10,
-            'tcp_keepcount' => 3,
-            'enable_coroutine' => true,
-            'max_wait_time' => 60,
-            'log_level' => SWOOLE_LOG_ERROR,
-            'log_connections' => false,
-            'recv_buffer_size' => 131072, // 128KB recv buffer for forwarding
-            'backend_connect_timeout' => 5.0, // Backend connection timeout
-        ], $config);
-
-        // Apply recv buffer size from config
-        /** @var int $recvBufferSize */
-        $recvBufferSize = $this->config['recv_buffer_size'];
-        $this->recvBufferSize = $recvBufferSize;
+        $this->config = $config ?? new SwooleCoroutineConfig();
 
         $this->initAdapters();
-        $this->configureServers($host);
+        $this->configureServers();
     }
 
     protected function initAdapters(): void
@@ -178,7 +143,7 @@ class SwooleCoroutine
 
         // Wait for first packet to establish backend connection
         $data = $connection->recv();
-        if ($data === '' || $data === false) {
+        if (! is_string($data) || $data === '') {
             $connection->close();
 
             return;
@@ -256,7 +221,6 @@ class SwooleCoroutine
             return;
         }
 
-        /** @phpstan-ignore-next-line */
         \Swoole\Coroutine\run($runner);
     }
 
