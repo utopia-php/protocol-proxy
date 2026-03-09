@@ -6,6 +6,7 @@ use Utopia\Proxy\Resolver;
 use Utopia\Proxy\Resolver\Result;
 use Utopia\Proxy\Server\TCP\Swoole as TCPServer;
 use Utopia\Proxy\Server\TCP\SwooleCoroutine as TCPCoroutineServer;
+use Utopia\Proxy\Server\TCP\Config as TCPConfig;
 
 /**
  * TCP Proxy Server Example (PostgreSQL + MySQL)
@@ -75,71 +76,31 @@ $resolver = new class ($backendEndpoint) implements Resolver {
     }
 };
 
-$config = [
-    // Server settings
-    'host' => '0.0.0.0',
-    'workers' => $workers,
-
-    // Performance tuning
-    'max_connections' => 200_000,
-    'max_coroutine' => 200_000,
-    'socket_buffer_size' => 16 * 1024 * 1024, // 16MB for database traffic
-    'buffer_output_size' => 16 * 1024 * 1024, // 16MB
-    'log_level' => SWOOLE_LOG_ERROR,
-    'reactor_num' => $reactorNum,
-    'dispatch_mode' => $dispatchMode,
-    'enable_reuse_port' => true,
-    'backlog' => 65535,
-    'package_max_length' => 32 * 1024 * 1024, // 32MB max query/result
-    'tcp_keepidle' => 30,
-    'tcp_keepinterval' => 10,
-    'tcp_keepcount' => 3,
-
-    // Cold-start settings
-    'cold_start_timeout' => 30_000,
-    'health_check_interval' => 100,
-
-    // Backend services
-    'compute_api_url' => getenv('COMPUTE_API_URL') ?: 'http://appwrite-api/v1/compute',
-    'compute_api_key' => getenv('COMPUTE_API_KEY') ?: '',
-
-    // Database connection
-    'db_host' => getenv('DB_HOST') ?: 'localhost',
-    'db_port' => (int) (getenv('DB_PORT') ?: 3306),
-    'db_user' => getenv('DB_USER') ?: 'appwrite',
-    'db_pass' => getenv('DB_PASS') ?: 'password',
-    'db_name' => getenv('DB_NAME') ?: 'appwrite',
-
-    // Redis cache
-    'redis_host' => getenv('REDIS_HOST') ?: '127.0.0.1',
-    'redis_port' => (int) (getenv('REDIS_PORT') ?: 6379),
-
-    // Skip SSRF validation for trusted backends (e.g., Docker internal networks)
-    'skip_validation' => $skipValidation,
-];
-
 $postgresPort = $envInt('TCP_POSTGRES_PORT', 5432);
 $mysqlPort = $envInt('TCP_MYSQL_PORT', 3306);
-$ports = array_values(array_filter([$postgresPort, $mysqlPort], static fn (int $port): bool => $port > 0)); // PostgreSQL, MySQL
+$ports = array_values(array_filter([$postgresPort, $mysqlPort], static fn (int $port): bool => $port > 0));
 if ($ports === []) {
     $ports = [5432, 3306];
 }
 
+$config = new TCPConfig(
+    host: '0.0.0.0',
+    ports: $ports,
+    workers: $workers,
+    reactorNum: $reactorNum,
+    dispatchMode: $dispatchMode,
+    skipValidation: $skipValidation,
+);
+
 echo "Starting TCP Proxy Server...\n";
-echo "Host: {$config['host']}\n";
-echo 'Ports: '.implode(', ', $ports)."\n";
-echo "Workers: {$config['workers']}\n";
-echo "Max connections: {$config['max_connections']}\n";
+echo "Host: {$config->host}\n";
+echo 'Ports: '.implode(', ', $config->ports)."\n";
+echo "Workers: {$config->workers}\n";
+echo "Max connections: {$config->maxConnections}\n";
 echo "Server impl: {$serverImpl}\n";
 echo "\n";
 
 $serverClass = $serverImpl === 'swoole' ? TCPServer::class : TCPCoroutineServer::class;
-$server = new $serverClass(
-    $resolver,
-    $config['host'],
-    $ports,
-    $config['workers'],
-    $config
-);
+$server = new $serverClass($resolver, $config);
 
 $server->start();

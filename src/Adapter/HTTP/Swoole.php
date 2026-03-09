@@ -15,12 +15,6 @@ use Utopia\Proxy\Resolver;
  * - Resolution: Provided by Resolver implementation
  * - Output: Backend endpoint (IP:port)
  *
- * Performance:
- * - 250,000+ requests/second
- * - <1ms p50 latency (cached)
- * - <5ms p99 latency
- * - 100,000+ concurrent connections
- *
  * Example:
  * ```php
  * $resolver = new MyFunctionResolver();

@@ -14,7 +14,8 @@ use Utopia\Proxy\Resolver;
  * Example:
  * ```php
  * $resolver = new MyDatabaseResolver();
- * $server = new Swoole($resolver, host: '0.0.0.0', ports: [5432, 3306]);
+ * $config = new Config(host: '0.0.0.0', ports: [5432, 3306]);
+ * $server = new Swoole($resolver, $config);
  * $server->start();
  * ```
  */
@@ -25,11 +26,7 @@ class Swoole
     /** @var array<int, TCPAdapter> */
     protected array $adapters = [];
 
-    /** @var array<string, mixed> */
-    protected array $config;
-
-    /** @var array<int, int> */
-    protected array $ports;
+    protected Config $config;
 
     /** @var array<int, bool> */
     protected array $forwarding = [];
@@ -43,55 +40,27 @@ class Swoole
     /** @var array<int, int> */
     protected array $clientPorts = [];
 
-    /** @var int Recv buffer size for forwarding - larger = fewer syscalls */
-    protected int $recvBufferSize = 131072; // 128KB
-
-    /**
-     * @param  array<int, int>  $ports
-     * @param  array<string, mixed>  $config
-     */
     public function __construct(
         protected Resolver $resolver,
-        string $host = '0.0.0.0',
-        array $ports = [5432, 3306], // PostgreSQL, MySQL
-        int $workers = 16,
-        array $config = []
+        ?Config $config = null,
     ) {
-        $this->ports = $ports;
-        $this->config = array_merge([
-            'host' => $host,
-            'workers' => $workers,
-            'max_connections' => 200000,
-            'max_coroutine' => 200000,
-            'socket_buffer_size' => 16 * 1024 * 1024, // 16MB for database traffic
-            'buffer_output_size' => 16 * 1024 * 1024,
-            'reactor_num' => swoole_cpu_num() * 2,
-            'dispatch_mode' => 2, // Fixed dispatch for connection affinity
-            'enable_reuse_port' => true,
-            'backlog' => 65535,
-            'package_max_length' => 32 * 1024 * 1024, // 32MB max query/result
-            'tcp_keepidle' => 30,
-            'tcp_keepinterval' => 10,
-            'tcp_keepcount' => 3,
-            'enable_coroutine' => true,
-            'max_wait_time' => 60,
-            'log_level' => SWOOLE_LOG_ERROR,
-            'log_connections' => false,
-            'recv_buffer_size' => 131072, // 128KB recv buffer for forwarding
-            'backend_connect_timeout' => 5.0, // Backend connection timeout
-        ], $config);
-
-        // Apply recv buffer size from config
-        /** @var int $recvBufferSize */
-        $recvBufferSize = $this->config['recv_buffer_size'];
-        $this->recvBufferSize = $recvBufferSize;
+        $this->config = $config ?? new Config();
 
         // Create main server on first port
-        $this->server = new Server($host, $ports[0], SWOOLE_PROCESS, SWOOLE_SOCK_TCP);
+        $this->server = new Server(
+            $this->config->host,
+            $this->config->ports[0],
+            SWOOLE_PROCESS,
+            SWOOLE_SOCK_TCP,
+        );
 
         // Add listeners for additional ports
-        for ($i = 1; $i < count($ports); $i++) {
-            $this->server->addlistener($host, $ports[$i], SWOOLE_SOCK_TCP);
+        for ($i = 1; $i < count($this->config->ports); $i++) {
+            $this->server->addlistener(
+                $this->config->host,
+                $this->config->ports[$i],
+                SWOOLE_SOCK_TCP,
+            );
         }
 
         $this->configure();
@@ -100,18 +69,18 @@ class Swoole
     protected function configure(): void
     {
         $this->server->set([
-            'worker_num' => $this->config['workers'],
-            'reactor_num' => $this->config['reactor_num'],
-            'max_connection' => $this->config['max_connections'],
-            'max_coroutine' => $this->config['max_coroutine'],
-            'socket_buffer_size' => $this->config['socket_buffer_size'],
-            'buffer_output_size' => $this->config['buffer_output_size'],
-            'enable_coroutine' => $this->config['enable_coroutine'],
-            'max_wait_time' => $this->config['max_wait_time'],
-            'log_level' => $this->config['log_level'],
-            'dispatch_mode' => $this->config['dispatch_mode'],
-            'enable_reuse_port' => $this->config['enable_reuse_port'],
-            'backlog' => $this->config['backlog'],
+            'worker_num' => $this->config->workers,
+            'reactor_num' => $this->config->reactorNum,
+            'max_connection' => $this->config->maxConnections,
+            'max_coroutine' => $this->config->maxCoroutine,
+            'socket_buffer_size' => $this->config->socketBufferSize,
+            'buffer_output_size' => $this->config->bufferOutputSize,
+            'enable_coroutine' => $this->config->enableCoroutine,
+            'max_wait_time' => $this->config->maxWaitTime,
+            'log_level' => $this->config->logLevel,
+            'dispatch_mode' => $this->config->dispatchMode,
+            'enable_reuse_port' => $this->config->enableReusePort,
+            'backlog' => $this->config->backlog,
 
             // TCP performance tuning
             'open_tcp_nodelay' => true,
@@ -119,56 +88,44 @@ class Swoole
             'open_cpu_affinity' => true,
             'tcp_defer_accept' => 5,
             'open_tcp_keepalive' => true,
-            'tcp_keepidle' => $this->config['tcp_keepidle'],
-            'tcp_keepinterval' => $this->config['tcp_keepinterval'],
-            'tcp_keepcount' => $this->config['tcp_keepcount'],
+            'tcp_keepidle' => $this->config->tcpKeepidle,
+            'tcp_keepinterval' => $this->config->tcpKeepinterval,
+            'tcp_keepcount' => $this->config->tcpKeepcount,
 
             // Package settings for database protocols
             'open_length_check' => false, // Let database handle framing
-            'package_max_length' => $this->config['package_max_length'],
+            'package_max_length' => $this->config->packageMaxLength,
 
             // Enable stats
             'task_enable_coroutine' => true,
         ]);
 
-        $this->server->on('start', [$this, 'onStart']);
-        $this->server->on('workerStart', [$this, 'onWorkerStart']);
-        $this->server->on('connect', [$this, 'onConnect']);
-        $this->server->on('receive', [$this, 'onReceive']);
-        $this->server->on('close', [$this, 'onClose']);
+        $this->server->on('start', $this->onStart(...));
+        $this->server->on('workerStart', $this->onWorkerStart(...));
+        $this->server->on('connect', $this->onConnect(...));
+        $this->server->on('receive', $this->onReceive(...));
+        $this->server->on('close', $this->onClose(...));
     }
 
     public function onStart(Server $server): void
     {
-        /** @var string $host */
-        $host = $this->config['host'];
-        /** @var int $workers */
-        $workers = $this->config['workers'];
-        /** @var int $maxConnections */
-        $maxConnections = $this->config['max_connections'];
-        echo "TCP Proxy Server started at {$host}\n";
-        echo 'Ports: '.implode(', ', $this->ports)."\n";
-        echo "Workers: {$workers}\n";
-        echo "Max connections: {$maxConnections}\n";
+        echo "TCP Proxy Server started at {$this->config->host}\n";
+        echo 'Ports: '.implode(', ', $this->config->ports)."\n";
+        echo "Workers: {$this->config->workers}\n";
+        echo "Max connections: {$this->config->maxConnections}\n";
     }
 
     public function onWorkerStart(Server $server, int $workerId): void
     {
         // Initialize TCP adapter per worker per port
-        foreach ($this->ports as $port) {
+        foreach ($this->config->ports as $port) {
             $adapter = new TCPAdapter($this->resolver, port: $port);
 
-            // Apply skip_validation config if set
-            if (! empty($this->config['skip_validation'])) {
+            if ($this->config->skipValidation) {
                 $adapter->setSkipValidation(true);
             }
 
-            // Apply backend connection timeout
-            if (isset($this->config['backend_connect_timeout'])) {
-                /** @var float $timeout */
-                $timeout = $this->config['backend_connect_timeout'];
-                $adapter->setConnectTimeout($timeout);
-            }
+            $adapter->setConnectTimeout($this->config->backendConnectTimeout);
 
             $this->adapters[$port] = $adapter;
         }
@@ -187,7 +144,7 @@ class Swoole
         $port = $info['server_port'] ?? 0;
         $this->clientPorts[$fd] = $port;
 
-        if (! empty($this->config['log_connections'])) {
+        if ($this->config->logConnections) {
             echo "Client #{$fd} connected to port {$port}\n";
         }
     }
@@ -256,7 +213,7 @@ class Swoole
      */
     protected function startForwarding(Server $server, int $clientFd, Client $backendClient): void
     {
-        $bufferSize = $this->recvBufferSize;
+        $bufferSize = $this->config->recvBufferSize;
 
         Coroutine::create(function () use ($server, $clientFd, $backendClient, $bufferSize) {
             // Forward backend -> client with larger buffer for fewer syscalls
@@ -274,7 +231,7 @@ class Swoole
 
     public function onClose(Server $server, int $fd, int $reactorId): void
     {
-        if (! empty($this->config['log_connections'])) {
+        if ($this->config->logConnections) {
             echo "Client #{$fd} disconnected\n";
         }
 
