@@ -214,16 +214,14 @@ class Swoole
     protected function startForwarding(Server $server, int $clientFd, Client $backendClient): void
     {
         $bufferSize = $this->config->recvBufferSize;
+        $backendSocket = $backendClient->exportSocket();
 
-        Coroutine::create(function () use ($server, $clientFd, $backendClient, $bufferSize) {
-            // Forward backend -> client with larger buffer for fewer syscalls
-            while ($server->exist($clientFd) && $backendClient->isConnected()) {
-                $data = $backendClient->recv($bufferSize);
-
+        Coroutine::create(function () use ($server, $clientFd, $backendSocket, $bufferSize) {
+            while ($server->exist($clientFd)) {
+                $data = $backendSocket->recv($bufferSize);
                 if ($data === false || $data === '') {
                     break;
                 }
-
                 $server->send($clientFd, $data);
             }
         });

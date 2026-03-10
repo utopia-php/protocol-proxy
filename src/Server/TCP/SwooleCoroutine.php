@@ -3,10 +3,8 @@
 namespace Utopia\Proxy\Server\TCP;
 
 use Swoole\Coroutine;
-use Swoole\Coroutine\Client;
 use Swoole\Coroutine\Server as CoroutineServer;
 use Swoole\Coroutine\Server\Connection;
-use Swoole\Coroutine\Socket;
 use Utopia\Proxy\Adapter\TCP\Swoole as TCPAdapter;
 use Utopia\Proxy\Resolver;
 
@@ -104,7 +102,7 @@ class SwooleCoroutine
 
     protected function handleConnection(Connection $connection, int $port): void
     {
-        $socket = $connection->exportSocket();
+        $clientSocket = $connection->exportSocket();
         $clientId = spl_object_id($connection);
         $adapter = $this->adapters[$port];
         $bufferSize = $this->config->recvBufferSize;
@@ -114,9 +112,9 @@ class SwooleCoroutine
         }
 
         // Wait for first packet to establish backend connection
-        $data = $socket->recv($bufferSize);
+        $data = $clientSocket->recv($bufferSize);
         if ($data === false || $data === '') {
-            $connection->close();
+            $clientSocket->close();
 
             return;
         }
@@ -124,52 +122,46 @@ class SwooleCoroutine
         try {
             $databaseId = $adapter->parseDatabaseId($data, $clientId);
             $backendClient = $adapter->getBackendConnection($databaseId, $clientId);
-            $this->startForwarding($socket, $backendClient);
-            $backendClient->send($data);
+            $backendSocket = $backendClient->exportSocket();
+
+            // Start backend -> client forwarding in separate coroutine
+            Coroutine::create(function () use ($clientSocket, $backendSocket, $bufferSize): void {
+                while (true) {
+                    $data = $backendSocket->recv($bufferSize);
+                    if ($data === false || $data === '') {
+                        break;
+                    }
+                    if ($clientSocket->sendAll($data) === false) {
+                        break;
+                    }
+                }
+                $clientSocket->close();
+            });
+
+            // Forward initial packet
+            $backendSocket->sendAll($data);
         } catch (\Exception $e) {
             echo "Error handling data from #{$clientId}: {$e->getMessage()}\n";
-            $connection->close();
+            $clientSocket->close();
 
             return;
         }
 
-        // Fast path: forward subsequent packets directly
+        // Client -> backend forwarding in current coroutine
         while (true) {
-            $data = $socket->recv($bufferSize);
+            $data = $clientSocket->recv($bufferSize);
             if ($data === false || $data === '') {
                 break;
             }
-            $backendClient->send($data);
+            $backendSocket->sendAll($data);
         }
 
-        $backendClient->close();
+        $backendSocket->close();
         $adapter->closeBackendConnection($databaseId, $clientId);
-        $connection->close();
 
         if ($this->config->logConnections) {
             echo "Client #{$clientId} disconnected\n";
         }
-    }
-
-    protected function startForwarding(Socket $socket, Client $backendClient): void
-    {
-        $bufferSize = $this->config->recvBufferSize;
-
-        Coroutine::create(function () use ($socket, $backendClient, $bufferSize): void {
-            // Forward backend -> client
-            while ($backendClient->isConnected()) {
-                $data = $backendClient->recv($bufferSize);
-                if ($data === false || $data === '') {
-                    break;
-                }
-
-                if ($socket->sendAll($data) === false) {
-                    break;
-                }
-            }
-
-            $socket->close();
-        });
     }
 
     public function start(): void
