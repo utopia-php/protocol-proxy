@@ -9,12 +9,6 @@
             "email": "team@appwrite.io"
         }
     ],
-    "repositories": [
-        {
-            "type": "path",
-            "url": "../query"
-        }
-    ],
     "require": {
         "php": ">=8.4",
         "ext-swoole": ">=6.0",
