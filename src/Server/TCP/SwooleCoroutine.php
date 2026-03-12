@@ -5,7 +5,7 @@ namespace Utopia\Proxy\Server\TCP;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Server as CoroutineServer;
 use Swoole\Coroutine\Server\Connection;
-use Utopia\Proxy\Adapter\TCP\Swoole as TCPAdapter;
+use Utopia\Proxy\Adapter\TCP as TCPAdapter;
 use Utopia\Proxy\Resolver;
 
 /**
@@ -211,7 +211,7 @@ class SwooleCoroutine
                 break;
             }
             $adapter->recordBytes($databaseId, \strlen($data), 0);
-            $adapter->trackActivity($databaseId);
+            $adapter->track($databaseId);
             $backendSocket->sendAll($data);
         }
 

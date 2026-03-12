@@ -119,14 +119,14 @@ $resolver = new class () implements Resolver {
         // Example: Log to telemetry, update metrics
     }
 
-    public function trackActivity(string $resourceId, array $metadata = []): void
+    public function track(string $resourceId, array $metadata = []): void
     {
         $this->lastActivity[$resourceId] = microtime(true);
 
         // Example: Update activity metrics for cold-start detection
     }
 
-    public function invalidateCache(string $resourceId): void
+    public function purge(string $resourceId): void
     {
         echo "[Resolver] Cache invalidated for: {$resourceId}\n";
 
@@ -159,7 +159,7 @@ echo "Listening on: http://0.0.0.0:8080\n";
 echo "\nResolver features:\n";
 echo "- resolve: K8s service discovery with domain validation\n";
 echo "- onConnect/onDisconnect: Connection lifecycle tracking\n";
-echo "- trackActivity: Activity metrics for cold-start detection\n";
+echo "- track: Activity metrics for cold-start detection\n";
 echo "- getStats: Statistics and telemetry\n\n";
 
 $server->start();

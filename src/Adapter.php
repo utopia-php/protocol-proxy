@@ -11,16 +11,16 @@ use Utopia\Proxy\Resolver\Exception as ResolverException;
  * Base class for protocol-specific proxy implementations.
  * Routes traffic to backends resolved by the provided Resolver.
  */
-abstract class Adapter
+class Adapter
 {
-    protected Table $routingTable;
+    protected Table $router;
 
     /** @var array<string, int> Connection pool stats */
     protected array $stats = [
         'connections' => 0,
-        'cache_hits' => 0,
-        'cache_misses' => 0,
-        'routing_errors' => 0,
+        'cacheHits' => 0,
+        'cacheMisses' => 0,
+        'routingErrors' => 0,
     ];
 
     /** @var bool Skip SSRF validation for trusted backends */
@@ -40,9 +40,12 @@ abstract class Adapter
             get {
                 return $this->resolver;
             }
-        }
+        },
+        protected string $name = 'Generic',
+        protected Protocol $protocol = Protocol::TCP,
+        protected string $description = 'Generic proxy adapter',
     ) {
-        $this->initRoutingTable();
+        $this->initRouter();
     }
 
     /**
@@ -101,8 +104,11 @@ abstract class Adapter
     /**
      * Record bytes transferred for a resource
      */
-    public function recordBytes(string $resourceId, int $inbound = 0, int $outbound = 0): void
-    {
+    public function recordBytes(
+        string $resourceId,
+        int $inbound = 0,
+        int $outbound = 0,
+    ): void {
         if (!isset($this->byteCounters[$resourceId])) {
             $this->byteCounters[$resourceId] = ['inbound' => 0, 'outbound' => 0];
         }
@@ -111,7 +117,7 @@ abstract class Adapter
         $this->byteCounters[$resourceId]['outbound'] += $outbound;
     }
 
-    public function trackActivity(string $resourceId, array $metadata = []): void
+    public function track(string $resourceId, array $metadata = []): void
     {
         $now = time();
         $lastUpdate = $this->lastActivityUpdate[$resourceId] ?? 0;
@@ -129,23 +135,32 @@ abstract class Adapter
             $this->byteCounters[$resourceId] = ['inbound' => 0, 'outbound' => 0];
         }
 
-        $this->resolver->trackActivity($resourceId, $metadata);
+        $this->resolver->track($resourceId, $metadata);
     }
 
     /**
      * Get adapter name
      */
-    abstract public function getName(): string;
+    public function getName(): string
+    {
+        return $this->name;
+    }
 
     /**
      * Get protocol type
      */
-    abstract public function getProtocol(): string;
+    public function getProtocol(): Protocol
+    {
+        return $this->protocol;
+    }
 
     /**
      * Get adapter description
      */
-    abstract public function getDescription(): string;
+    public function getDescription(): string
+    {
+        return $this->description;
+    }
 
     /**
      * Route connection to backend
@@ -157,14 +172,13 @@ abstract class Adapter
      */
     public function route(string $resourceId): ConnectionResult
     {
-        // Fast path: check cache first
-        $cached = $this->routingTable->get($resourceId);
+        $cached = $this->router->get($resourceId);
         $now = \time();
 
-        if ($cached !== false && is_array($cached)) {
+        if ($cached !== false && \is_array($cached)) {
             /** @var array{endpoint: string, updated: int} $cached */
             if (($now - $cached['updated']) < 1) {
-                $this->stats['cache_hits']++;
+                $this->stats['cacheHits']++;
                 $this->stats['connections']++;
 
                 return new ConnectionResult(
@@ -175,7 +189,7 @@ abstract class Adapter
             }
         }
 
-        $this->stats['cache_misses']++;
+        $this->stats['cacheMisses']++;
 
         try {
             $result = $this->resolver->resolve($resourceId);
@@ -192,7 +206,7 @@ abstract class Adapter
                 $this->validateEndpoint($endpoint);
             }
 
-            $this->routingTable->set($resourceId, [
+            $this->router->set($resourceId, [
                 'endpoint' => $endpoint,
                 'updated' => $now,
             ]);
@@ -202,10 +216,10 @@ abstract class Adapter
             return new ConnectionResult(
                 endpoint: $endpoint,
                 protocol: $this->getProtocol(),
-                metadata: array_merge(['cached' => false], $result->metadata)
+                metadata: \array_merge(['cached' => false], $result->metadata)
             );
         } catch (\Exception $e) {
-            $this->stats['routing_errors']++;
+            $this->stats['routingErrors']++;
             throw $e;
         }
     }
@@ -266,12 +280,12 @@ abstract class Adapter
     /**
      * Initialize routing cache table
      */
-    protected function initRoutingTable(): void
+    protected function initRouter(): void
     {
-        $this->routingTable = new Table(1_000_000);
-        $this->routingTable->column('endpoint', Table::TYPE_STRING, 64);
-        $this->routingTable->column('updated', Table::TYPE_INT, 8);
-        $this->routingTable->create();
+        $this->router = new Table(200_000);
+        $this->router->column('endpoint', Table::TYPE_STRING, 256);
+        $this->router->column('updated', Table::TYPE_INT, 8);
+        $this->router->create();
     }
 
     /**
@@ -281,20 +295,20 @@ abstract class Adapter
      */
     public function getStats(): array
     {
-        $totalRequests = $this->stats['cache_hits'] + $this->stats['cache_misses'];
+        $totalRequests = $this->stats['cacheHits'] + $this->stats['cacheMisses'];
 
         return [
             'adapter' => $this->getName(),
-            'protocol' => $this->getProtocol(),
+            'protocol' => $this->getProtocol()->value,
             'connections' => $this->stats['connections'],
-            'cache_hits' => $this->stats['cache_hits'],
-            'cache_misses' => $this->stats['cache_misses'],
-            'cache_hit_rate' => $totalRequests > 0
-                ? \round($this->stats['cache_hits'] / $totalRequests * 100, 2)
+            'cacheHits' => $this->stats['cacheHits'],
+            'cacheMisses' => $this->stats['cacheMisses'],
+            'cacheHitRate' => $totalRequests > 0
+                ? \round($this->stats['cacheHits'] / $totalRequests * 100, 2)
                 : 0,
-            'routing_errors' => $this->stats['routing_errors'],
-            'routing_table_memory' => $this->routingTable->memorySize,
-            'routing_table_size' => $this->routingTable->count(),
+            'routingErrors' => $this->stats['routingErrors'],
+            'routingTableMemory' => $this->router->memorySize,
+            'routingTableSize' => $this->router->count(),
             'resolver' => $this->resolver->getStats(),
         ];
     }

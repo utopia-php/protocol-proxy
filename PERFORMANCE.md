@@ -195,9 +195,9 @@ print_r($stats);
 //     'manager' => [
 //         'connections' => 50000,
 //         'cold_starts' => 123,
-//         'cache_hits' => 998234,
-//         'cache_misses' => 1766,
-//         'cache_hit_rate' => 99.82,
+//         'cacheHits' => 998234,
+//         'cacheMisses' => 1766,
+//         'cacheHitRate' => 99.82,
 //     ]
 // ]
 ```
@@ -219,9 +219,9 @@ http_requests_total {$stats['requests']}
 # TYPE http_connections_active gauge
 http_connections_active {$stats['connections']}
 
-# HELP http_cache_hit_rate Cache hit rate percentage
-# TYPE http_cache_hit_rate gauge
-http_cache_hit_rate {$stats['manager']['cache_hit_rate']}
+# HELP http_cacheHitRate Cache hit rate percentage
+# TYPE http_cacheHitRate gauge
+http_cacheHitRate {$stats['manager']['cacheHitRate']}
 METRICS;
 
         $response->end($metrics);

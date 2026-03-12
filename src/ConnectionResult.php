@@ -11,9 +11,9 @@ class ConnectionResult
      * @param  array<string, mixed>  $metadata
      */
     public function __construct(
-        public string $endpoint,
-        public string $protocol,
-        public array $metadata = []
+        public private(set) string $endpoint,
+        public private(set) Protocol $protocol,
+        public private(set) array $metadata = []
     ) {
     }
 }

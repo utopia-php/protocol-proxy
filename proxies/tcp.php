@@ -98,11 +98,11 @@ $resolver = new class ($backendEndpoint) implements Resolver {
     {
     }
 
-    public function trackActivity(string $resourceId, array $metadata = []): void
+    public function track(string $resourceId, array $metadata = []): void
     {
     }
 
-    public function invalidateCache(string $resourceId): void
+    public function purge(string $resourceId): void
     {
     }
 

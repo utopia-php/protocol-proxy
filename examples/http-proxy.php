@@ -63,12 +63,12 @@ $resolver = new class ($backends) implements Resolver {
         }
     }
 
-    public function trackActivity(string $resourceId, array $metadata = []): void
+    public function track(string $resourceId, array $metadata = []): void
     {
         // Track activity for cold-start detection
     }
 
-    public function invalidateCache(string $resourceId): void
+    public function purge(string $resourceId): void
     {
         // No caching in this simple example
     }

@@ -5,7 +5,8 @@ namespace Utopia\Proxy\Server\SMTP;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Client;
 use Swoole\Server;
-use Utopia\Proxy\Adapter\SMTP\Swoole as SMTPAdapter;
+use Utopia\Proxy\Adapter;
+use Utopia\Proxy\Protocol;
 use Utopia\Proxy\Resolver;
 
 /**
@@ -22,7 +23,7 @@ class Swoole
 {
     protected Server $server;
 
-    protected SMTPAdapter $adapter;
+    protected Adapter $adapter;
 
     /** @var array<string, mixed> */
     protected array $config;
@@ -44,8 +45,8 @@ class Swoole
             'host' => $host,
             'port' => $port,
             'workers' => $workers,
-            'max_connections' => 50000,
-            'max_coroutine' => 50000,
+            'max_connections' => 50_000,
+            'max_coroutine' => 50_000,
             'socket_buffer_size' => 2 * 1024 * 1024, // 2MB
             'buffer_output_size' => 2 * 1024 * 1024,
             'enable_coroutine' => true,
@@ -81,11 +82,11 @@ class Swoole
             'task_enable_coroutine' => true,
         ]);
 
-        $this->server->on('start', [$this, 'onStart']);
-        $this->server->on('workerStart', [$this, 'onWorkerStart']);
-        $this->server->on('connect', [$this, 'onConnect']);
-        $this->server->on('receive', [$this, 'onReceive']);
-        $this->server->on('close', [$this, 'onClose']);
+        $this->server->on('start', $this->onStart(...));
+        $this->server->on('workerStart', $this->onWorkerStart(...));
+        $this->server->on('connect', $this->onConnect(...));
+        $this->server->on('receive', $this->onReceive(...));
+        $this->server->on('close', $this->onClose(...));
     }
 
     public function onStart(Server $server): void
@@ -105,7 +106,11 @@ class Swoole
 
     public function onWorkerStart(Server $server, int $workerId): void
     {
-        $this->adapter = new SMTPAdapter($this->resolver);
+        $this->adapter = new Adapter(
+            $this->resolver,
+            name: 'SMTP',
+            protocol: Protocol::SMTP
+        );
 
         // Apply skip_validation config if set
         if (! empty($this->config['skip_validation'])) {
@@ -123,7 +128,7 @@ class Swoole
         echo "Client #{$fd} connected\n";
 
         // Send SMTP greeting
-        $server->send($fd, "220 appwrite.io ESMTP Proxy\r\n");
+        $server->send($fd, "220 utopia-php.io ESMTP Proxy\r\n");
 
         // Initialize connection state
         $this->connections[$fd] = [

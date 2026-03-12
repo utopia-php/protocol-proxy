@@ -24,6 +24,28 @@ interface Resolver
     public function resolve(string $resourceId): Result;
 
     /**
+     * Track activity for a resource
+     *
+     * @param  string  $resourceId  The resource identifier
+     * @param  array<string, mixed>  $metadata  Activity metadata
+     */
+    public function track(string $resourceId, array $metadata = []): void;
+
+    /**
+     * Invalidate cached resolution data for a resource
+     *
+     * @param  string  $resourceId  The resource identifier
+     */
+    public function purge(string $resourceId): void;
+
+    /**
+     * Get resolver statistics
+     *
+     * @return array<string, mixed> Statistics data
+     */
+    public function getStats(): array;
+
+    /**
      * Called when a new connection is established
      *
      * @param  string  $resourceId  The resource identifier
@@ -38,26 +60,4 @@ interface Resolver
      * @param  array<string, mixed>  $metadata  Additional disconnection metadata
      */
     public function onDisconnect(string $resourceId, array $metadata = []): void;
-
-    /**
-     * Track activity for a resource
-     *
-     * @param  string  $resourceId  The resource identifier
-     * @param  array<string, mixed>  $metadata  Activity metadata
-     */
-    public function trackActivity(string $resourceId, array $metadata = []): void;
-
-    /**
-     * Invalidate cached resolution data for a resource
-     *
-     * @param  string  $resourceId  The resource identifier
-     */
-    public function invalidateCache(string $resourceId): void;
-
-    /**
-     * Get resolver statistics
-     *
-     * @return array<string, mixed> Statistics data
-     */
-    public function getStats(): array;
 }

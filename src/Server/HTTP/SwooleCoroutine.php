@@ -7,7 +7,8 @@ use Swoole\Coroutine\Client as CoroutineClient;
 use Swoole\Coroutine\Http\Server as CoroutineServer;
 use Swoole\Http\Request;
 use Swoole\Http\Response;
-use Utopia\Proxy\Adapter\HTTP\Swoole as HTTPAdapter;
+use Utopia\Proxy\Adapter;
+use Utopia\Proxy\Protocol;
 use Utopia\Proxy\Resolver;
 
 /**
@@ -24,7 +25,7 @@ class SwooleCoroutine
 {
     protected CoroutineServer $server;
 
-    protected HTTPAdapter $adapter;
+    protected Adapter $adapter;
 
     /** @var array<string, mixed> */
     protected array $config;
@@ -126,7 +127,7 @@ class SwooleCoroutine
 
     protected function initAdapter(): void
     {
-        $this->adapter = new HTTPAdapter($this->resolver);
+        $this->adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
 
         // Apply skip_validation config if set
         if (! empty($this->config['skip_validation'])) {
@@ -358,7 +359,7 @@ class SwooleCoroutine
 
             $telemetryResult = $telemetryData['result'] ?? null;
             if ($telemetryResult instanceof \Utopia\Proxy\ConnectionResult) {
-                $response->header('X-Proxy-Protocol', $telemetryResult->protocol);
+                $response->header('X-Proxy-Protocol', $telemetryResult->protocol->value);
 
                 if (isset($telemetryResult->metadata['cached'])) {
                     $response->header('X-Proxy-Cache', $telemetryResult->metadata['cached'] ? 'HIT' : 'MISS');
@@ -508,7 +509,7 @@ class SwooleCoroutine
 
             $telemetryResult = $telemetryData['result'] ?? null;
             if ($telemetryResult instanceof \Utopia\Proxy\ConnectionResult) {
-                $response->header('X-Proxy-Protocol', $telemetryResult->protocol);
+                $response->header('X-Proxy-Protocol', $telemetryResult->protocol->value);
 
                 if (isset($telemetryResult->metadata['cached'])) {
                     $response->header('X-Proxy-Cache', $telemetryResult->metadata['cached'] ? 'HIT' : 'MISS');

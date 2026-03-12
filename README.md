@@ -99,12 +99,12 @@ class MyResolver implements Resolver
         // Called when a connection is closed
     }
 
-    public function trackActivity(string $resourceId, array $metadata = []): void
+    public function track(string $resourceId, array $metadata = []): void
     {
         // Track activity for cold-start detection
     }
 
-    public function invalidateCache(string $resourceId): void
+    public function purge(string $resourceId): void
     {
         // Invalidate cached resolution data
     }
@@ -134,8 +134,8 @@ $resolver = new class implements Resolver {
     }
     public function onConnect(string $resourceId, array $metadata = []): void {}
     public function onDisconnect(string $resourceId, array $metadata = []): void {}
-    public function trackActivity(string $resourceId, array $metadata = []): void {}
-    public function invalidateCache(string $resourceId): void {}
+    public function track(string $resourceId, array $metadata = []): void {}
+    public function purge(string $resourceId): void {}
     public function getStats(): array { return []; }
 };
 
@@ -167,8 +167,8 @@ $resolver = new class implements Resolver {
     }
     public function onConnect(string $resourceId, array $metadata = []): void {}
     public function onDisconnect(string $resourceId, array $metadata = []): void {}
-    public function trackActivity(string $resourceId, array $metadata = []): void {}
-    public function invalidateCache(string $resourceId): void {}
+    public function track(string $resourceId, array $metadata = []): void {}
+    public function purge(string $resourceId): void {}
     public function getStats(): array { return []; }
 };
 
@@ -200,8 +200,8 @@ $resolver = new class implements Resolver {
     }
     public function onConnect(string $resourceId, array $metadata = []): void {}
     public function onDisconnect(string $resourceId, array $metadata = []): void {}
-    public function trackActivity(string $resourceId, array $metadata = []): void {}
-    public function invalidateCache(string $resourceId): void {}
+    public function track(string $resourceId, array $metadata = []): void {}
+    public function purge(string $resourceId): void {}
     public function getStats(): array { return []; }
 };
 
@@ -317,10 +317,10 @@ interface Resolver
     public function onDisconnect(string $resourceId, array $metadata = []): void;
 
     // Activity tracking for cold-start detection
-    public function trackActivity(string $resourceId, array $metadata = []): void;
+    public function track(string $resourceId, array $metadata = []): void;
 
     // Cache management
-    public function invalidateCache(string $resourceId): void;
+    public function purge(string $resourceId): void;
 
     // Statistics
     public function getStats(): array;
