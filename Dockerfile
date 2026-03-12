@@ -1,6 +1,6 @@
-FROM php:8.4-cli-alpine
+FROM php:8.4.18-cli-alpine3.23
 
-RUN apk add --no-cache \
+RUN apk update && apk upgrade && apk add --no-cache \
     autoconf \
     g++ \
     make \
@@ -8,30 +8,30 @@ RUN apk add --no-cache \
     libstdc++ \
     brotli-dev \
     libzip-dev \
-    openssl-dev
+    openssl-dev \
+    && rm -rf /var/cache/apk/*
 
 RUN docker-php-ext-install \
     pcntl \
     sockets \
     zip
 
-RUN pecl channel-update pecl.php.net && \
-    pecl install swoole-6.0.1 && \
+RUN pecl channel-update pecl.php.net
+
+RUN pecl install swoole && \
     docker-php-ext-enable swoole
 
-RUN pecl channel-update pecl.php.net && \
-    pecl install redis && \
+RUN pecl install redis && \
     docker-php-ext-enable redis
 
 WORKDIR /app
 
 COPY composer.json composer.lock ./
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
-RUN composer install --no-dev --optimize-autoloader \
-    --ignore-platform-req=ext-mongodb \
-    --ignore-platform-req=ext-memcached \
-    --ignore-platform-req=ext-opentelemetry \
-    --ignore-platform-req=ext-protobuf
+RUN composer install \
+    --no-dev \
+    --optimize-autoloader \
+    --ignore-platform-reqs
 
 COPY . .
 
