@@ -5,8 +5,8 @@ namespace Utopia\Proxy\Server\TCP;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Client;
 use Swoole\Server;
-use Utopia\Proxy\Adapter\TCP\Swoole as TCPAdapter;
-use Utopia\Proxy\QueryParser;
+use Utopia\Proxy\Adapter\TCP as TCPAdapter;
+use Utopia\Query\Type as QueryType;
 use Utopia\Proxy\Resolver;
 use Utopia\Proxy\Resolver\ReadWriteResolver;
 
@@ -223,14 +223,14 @@ class Swoole
             // Record inbound bytes and track activity
             if ($databaseId !== null && $adapter !== null) {
                 $adapter->recordBytes($databaseId, \strlen($data), 0);
-                $adapter->trackActivity($databaseId);
+                $adapter->track($databaseId);
             }
 
             // When read/write split is active and we have a read backend, classify and route
             if (isset($this->readBackendClients[$fd]) && $adapter !== null) {
                 $queryType = $adapter->classifyQuery($data, $fd);
 
-                if ($queryType === QueryParser::READ) {
+                if ($queryType === QueryType::Read) {
                     $this->readBackendClients[$fd]->send($data);
 
                     return;
@@ -297,12 +297,12 @@ class Swoole
             // If read/write split is enabled, establish read replica connection
             if ($adapter->isReadWriteSplit() && $this->resolver instanceof ReadWriteResolver) {
                 try {
-                    $readResult = $adapter->routeQuery($databaseId, QueryParser::READ);
+                    $readResult = $adapter->routeQuery($databaseId, QueryType::Read);
                     $readEndpoint = $readResult->endpoint;
                     [$readHost, $readPort] = \explode(':', $readEndpoint . ':' . $port);
 
                     // Only create separate read connection if it differs from the write endpoint
-                    $writeResult = $adapter->routeQuery($databaseId, QueryParser::WRITE);
+                    $writeResult = $adapter->routeQuery($databaseId, QueryType::Write);
                     if ($readEndpoint !== $writeResult->endpoint) {
                         $readClient = new \Swoole\Coroutine\Client(SWOOLE_SOCK_TCP);
                         $readClient->set([
