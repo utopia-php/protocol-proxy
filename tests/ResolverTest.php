@@ -8,7 +8,7 @@ use Utopia\Proxy\Resolver\Result as ResolverResult;
 
 class ResolverTest extends TestCase
 {
-    public function test_resolver_result_stores_values(): void
+    public function testResolverResultStoresValues(): void
     {
         $result = new ResolverResult(
             endpoint: '127.0.0.1:8080',
@@ -21,7 +21,7 @@ class ResolverTest extends TestCase
         $this->assertSame(30, $result->timeout);
     }
 
-    public function test_resolver_result_default_values(): void
+    public function testResolverResultDefaultValues(): void
     {
         $result = new ResolverResult(endpoint: '127.0.0.1:8080');
 
@@ -30,7 +30,7 @@ class ResolverTest extends TestCase
         $this->assertNull($result->timeout);
     }
 
-    public function test_resolver_exception_with_context(): void
+    public function testResolverExceptionWithContext(): void
     {
         $exception = new ResolverException(
             'Resource not found',
@@ -43,7 +43,7 @@ class ResolverTest extends TestCase
         $this->assertSame(['resourceId' => 'abc123', 'type' => 'database'], $exception->context);
     }
 
-    public function test_resolver_exception_error_codes(): void
+    public function testResolverExceptionErrorCodes(): void
     {
         $this->assertSame(404, ResolverException::NOT_FOUND);
         $this->assertSame(503, ResolverException::UNAVAILABLE);
@@ -52,7 +52,7 @@ class ResolverTest extends TestCase
         $this->assertSame(500, ResolverException::INTERNAL);
     }
 
-    public function test_resolver_exception_default_code(): void
+    public function testResolverExceptionDefaultCode(): void
     {
         $exception = new ResolverException('Internal error');
 

@@ -20,7 +20,7 @@ class AdapterMetadataTest extends TestCase
         $this->resolver = new MockResolver();
     }
 
-    public function test_http_adapter_metadata(): void
+    public function testHttpAdapterMetadata(): void
     {
         $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP, description: 'HTTP proxy adapter');
 
@@ -29,7 +29,7 @@ class AdapterMetadataTest extends TestCase
         $this->assertSame('HTTP proxy adapter', $adapter->getDescription());
     }
 
-    public function test_smtp_adapter_metadata(): void
+    public function testSmtpAdapterMetadata(): void
     {
         $adapter = new Adapter($this->resolver, name: 'SMTP', protocol: Protocol::SMTP, description: 'SMTP proxy adapter');
 
@@ -38,7 +38,7 @@ class AdapterMetadataTest extends TestCase
         $this->assertSame('SMTP proxy adapter', $adapter->getDescription());
     }
 
-    public function test_tcp_adapter_metadata(): void
+    public function testTcpAdapterMetadata(): void
     {
         $adapter = new TCPAdapter($this->resolver, port: 5432);
 

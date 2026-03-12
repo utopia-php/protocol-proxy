@@ -26,20 +26,20 @@ class ReadWriteSplitTest extends TestCase
     // Read/Write Split Configuration
     // ---------------------------------------------------------------
 
-    public function test_read_write_split_disabled_by_default(): void
+    public function testReadWriteSplitDisabledByDefault(): void
     {
         $adapter = new TCPAdapter($this->rwResolver, port: 5432);
         $this->assertFalse($adapter->isReadWriteSplit());
     }
 
-    public function test_read_write_split_can_be_enabled(): void
+    public function testReadWriteSplitCanBeEnabled(): void
     {
         $adapter = new TCPAdapter($this->rwResolver, port: 5432);
         $adapter->setReadWriteSplit(true);
         $this->assertTrue($adapter->isReadWriteSplit());
     }
 
-    public function test_read_write_split_can_be_disabled(): void
+    public function testReadWriteSplitCanBeDisabled(): void
     {
         $adapter = new TCPAdapter($this->rwResolver, port: 5432);
         $adapter->setReadWriteSplit(true);
@@ -74,7 +74,7 @@ class ReadWriteSplitTest extends TestCase
         return $header . "\x03" . $sql;
     }
 
-    public function test_classify_pg_select_as_read(): void
+    public function testClassifyPgSelectAsRead(): void
     {
         $adapter = new TCPAdapter($this->rwResolver, port: 5432);
         $adapter->setReadWriteSplit(true);
@@ -83,7 +83,7 @@ class ReadWriteSplitTest extends TestCase
         $this->assertSame(QueryType::Read, $adapter->classifyQuery($data, 1));
     }
 
-    public function test_classify_pg_insert_as_write(): void
+    public function testClassifyPgInsertAsWrite(): void
     {
         $adapter = new TCPAdapter($this->rwResolver, port: 5432);
         $adapter->setReadWriteSplit(true);
@@ -92,7 +92,7 @@ class ReadWriteSplitTest extends TestCase
         $this->assertSame(QueryType::Write, $adapter->classifyQuery($data, 1));
     }
 
-    public function test_classify_mysql_select_as_read(): void
+    public function testClassifyMysqlSelectAsRead(): void
     {
         $adapter = new TCPAdapter($this->rwResolver, port: 3306);
         $adapter->setReadWriteSplit(true);
@@ -101,7 +101,7 @@ class ReadWriteSplitTest extends TestCase
         $this->assertSame(QueryType::Read, $adapter->classifyQuery($data, 1));
     }
 
-    public function test_classify_mysql_insert_as_write(): void
+    public function testClassifyMysqlInsertAsWrite(): void
     {
         $adapter = new TCPAdapter($this->rwResolver, port: 3306);
         $adapter->setReadWriteSplit(true);
@@ -110,7 +110,7 @@ class ReadWriteSplitTest extends TestCase
         $this->assertSame(QueryType::Write, $adapter->classifyQuery($data, 1));
     }
 
-    public function test_classify_returns_write_when_split_disabled(): void
+    public function testClassifyReturnsWriteWhenSplitDisabled(): void
     {
         $adapter = new TCPAdapter($this->rwResolver, port: 5432);
         // Read/write split is disabled by default
@@ -123,7 +123,7 @@ class ReadWriteSplitTest extends TestCase
     // Transaction Pinning
     // ---------------------------------------------------------------
 
-    public function test_begin_pins_connection_to_primary(): void
+    public function testBeginPinsConnectionToPrimary(): void
     {
         $adapter = new TCPAdapter($this->rwResolver, port: 5432);
         $adapter->setReadWriteSplit(true);
@@ -140,7 +140,7 @@ class ReadWriteSplitTest extends TestCase
         $this->assertTrue($adapter->isConnectionPinned($clientFd));
     }
 
-    public function test_pinned_connection_routes_select_to_write(): void
+    public function testPinnedConnectionRoutesSelectToWrite(): void
     {
         $adapter = new TCPAdapter($this->rwResolver, port: 5432);
         $adapter->setReadWriteSplit(true);
@@ -156,7 +156,7 @@ class ReadWriteSplitTest extends TestCase
         $this->assertSame(QueryType::Write, $adapter->classifyQuery($data, $clientFd));
     }
 
-    public function test_commit_unpins_connection(): void
+    public function testCommitUnpinsConnection(): void
     {
         $adapter = new TCPAdapter($this->rwResolver, port: 5432);
         $adapter->setReadWriteSplit(true);
@@ -176,7 +176,7 @@ class ReadWriteSplitTest extends TestCase
         $this->assertSame(QueryType::Read, $adapter->classifyQuery($data, $clientFd));
     }
 
-    public function test_rollback_unpins_connection(): void
+    public function testRollbackUnpinsConnection(): void
     {
         $adapter = new TCPAdapter($this->rwResolver, port: 5432);
         $adapter->setReadWriteSplit(true);
@@ -192,7 +192,7 @@ class ReadWriteSplitTest extends TestCase
         $this->assertFalse($adapter->isConnectionPinned($clientFd));
     }
 
-    public function test_start_transaction_pins_connection(): void
+    public function testStartTransactionPinsConnection(): void
     {
         $adapter = new TCPAdapter($this->rwResolver, port: 5432);
         $adapter->setReadWriteSplit(true);
@@ -203,7 +203,7 @@ class ReadWriteSplitTest extends TestCase
         $this->assertTrue($adapter->isConnectionPinned($clientFd));
     }
 
-    public function test_mysql_begin_pins_connection(): void
+    public function testMysqlBeginPinsConnection(): void
     {
         $adapter = new TCPAdapter($this->rwResolver, port: 3306);
         $adapter->setReadWriteSplit(true);
@@ -214,7 +214,7 @@ class ReadWriteSplitTest extends TestCase
         $this->assertTrue($adapter->isConnectionPinned($clientFd));
     }
 
-    public function test_mysql_commit_unpins_connection(): void
+    public function testMysqlCommitUnpinsConnection(): void
     {
         $adapter = new TCPAdapter($this->rwResolver, port: 3306);
         $adapter->setReadWriteSplit(true);
@@ -228,7 +228,7 @@ class ReadWriteSplitTest extends TestCase
         $this->assertFalse($adapter->isConnectionPinned($clientFd));
     }
 
-    public function test_clear_connection_state_removes_pin(): void
+    public function testClearConnectionStateRemovesPin(): void
     {
         $adapter = new TCPAdapter($this->rwResolver, port: 5432);
         $adapter->setReadWriteSplit(true);
@@ -246,7 +246,7 @@ class ReadWriteSplitTest extends TestCase
     // Multiple Connections Independence
     // ---------------------------------------------------------------
 
-    public function test_pinning_is_per_connection(): void
+    public function testPinningIsPerConnection(): void
     {
         $adapter = new TCPAdapter($this->rwResolver, port: 5432);
         $adapter->setReadWriteSplit(true);
@@ -270,7 +270,7 @@ class ReadWriteSplitTest extends TestCase
     // Route Query Integration (with ReadWriteResolver)
     // ---------------------------------------------------------------
 
-    public function test_route_query_read_uses_read_endpoint(): void
+    public function testRouteQueryReadUsesReadEndpoint(): void
     {
         $this->rwResolver->setEndpoint('primary.db:5432');
         $this->rwResolver->setReadEndpoint('replica.db:5432');
@@ -285,7 +285,7 @@ class ReadWriteSplitTest extends TestCase
         $this->assertSame('read', $result->metadata['route']);
     }
 
-    public function test_route_query_write_uses_write_endpoint(): void
+    public function testRouteQueryWriteUsesWriteEndpoint(): void
     {
         $this->rwResolver->setEndpoint('primary.db:5432');
         $this->rwResolver->setReadEndpoint('replica.db:5432');
@@ -300,7 +300,7 @@ class ReadWriteSplitTest extends TestCase
         $this->assertSame('write', $result->metadata['route']);
     }
 
-    public function test_route_query_falls_back_when_split_disabled(): void
+    public function testRouteQueryFallsBackWhenSplitDisabled(): void
     {
         $this->rwResolver->setEndpoint('default.db:5432');
         $this->rwResolver->setReadEndpoint('replica.db:5432');
@@ -314,7 +314,7 @@ class ReadWriteSplitTest extends TestCase
         $this->assertSame('default.db:5432', $result->endpoint);
     }
 
-    public function test_route_query_falls_back_with_basic_resolver(): void
+    public function testRouteQueryFallsBackWithBasicResolver(): void
     {
         $this->basicResolver->setEndpoint('default.db:5432');
 
@@ -331,7 +331,7 @@ class ReadWriteSplitTest extends TestCase
     // Transaction State with SET Command
     // ---------------------------------------------------------------
 
-    public function test_set_command_routes_to_primary_but_does_not_pin(): void
+    public function testSetCommandRoutesToPrimaryButDoesNotPin(): void
     {
         $adapter = new TCPAdapter($this->rwResolver, port: 5432);
         $adapter->setReadWriteSplit(true);
@@ -350,7 +350,7 @@ class ReadWriteSplitTest extends TestCase
     // Unknown Queries Route to Primary
     // ---------------------------------------------------------------
 
-    public function test_unknown_query_routes_to_write(): void
+    public function testUnknownQueryRoutesToWrite(): void
     {
         $adapter = new TCPAdapter($this->rwResolver, port: 5432);
         $adapter->setReadWriteSplit(true);

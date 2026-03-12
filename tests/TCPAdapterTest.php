@@ -19,7 +19,7 @@ class TCPAdapterTest extends TestCase
         $this->resolver = new MockResolver();
     }
 
-    public function test_postgres_database_id_parsing(): void
+    public function testPostgresDatabaseIdParsing(): void
     {
         $adapter = new TCPAdapter($this->resolver, port: 5432);
         $data = "user\x00appwrite\x00database\x00db-abc123\x00";
@@ -28,7 +28,7 @@ class TCPAdapterTest extends TestCase
         $this->assertSame(Protocol::PostgreSQL, $adapter->getProtocol());
     }
 
-    public function test_my_sql_database_id_parsing(): void
+    public function testMySqlDatabaseIdParsing(): void
     {
         $adapter = new TCPAdapter($this->resolver, port: 3306);
         $data = "\x00\x00\x00\x00\x02db-xyz789";
@@ -37,7 +37,7 @@ class TCPAdapterTest extends TestCase
         $this->assertSame(Protocol::MySQL, $adapter->getProtocol());
     }
 
-    public function test_postgres_database_id_parsing_fails_on_invalid_data(): void
+    public function testPostgresDatabaseIdParsingFailsOnInvalidData(): void
     {
         $adapter = new TCPAdapter($this->resolver, port: 5432);
 
@@ -47,7 +47,7 @@ class TCPAdapterTest extends TestCase
         $adapter->parseDatabaseId('invalid', 1);
     }
 
-    public function test_my_sql_database_id_parsing_fails_on_invalid_data(): void
+    public function testMySqlDatabaseIdParsingFailsOnInvalidData(): void
     {
         $adapter = new TCPAdapter($this->resolver, port: 3306);
 

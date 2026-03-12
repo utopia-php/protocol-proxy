@@ -38,7 +38,7 @@ class EdgeIntegrationTest extends TestCase
     /**
      * @group integration
      */
-    public function test_edge_resolver_resolves_database_id_to_endpoint(): void
+    public function testEdgeResolverResolvesDatabaseIdToEndpoint(): void
     {
         $resolver = new EdgeMockResolver();
         $resolver->registerDatabase('abc123', [
@@ -64,7 +64,7 @@ class EdgeIntegrationTest extends TestCase
     /**
      * @group integration
      */
-    public function test_edge_resolver_returns_not_found_for_unknown_database(): void
+    public function testEdgeResolverReturnsNotFoundForUnknownDatabase(): void
     {
         $resolver = new EdgeMockResolver();
 
@@ -80,7 +80,7 @@ class EdgeIntegrationTest extends TestCase
     /**
      * @group integration
      */
-    public function test_database_id_extraction_feeds_into_resolution(): void
+    public function testDatabaseIdExtractionFeedsIntoResolution(): void
     {
         $resolver = new EdgeMockResolver();
         $resolver->registerDatabase('abc123', [
@@ -106,7 +106,7 @@ class EdgeIntegrationTest extends TestCase
     /**
      * @group integration
      */
-    public function test_mysql_database_id_extraction_feeds_into_resolution(): void
+    public function testMysqlDatabaseIdExtractionFeedsIntoResolution(): void
     {
         $resolver = new EdgeMockResolver();
         $resolver->registerDatabase('xyz789', [
@@ -137,7 +137,7 @@ class EdgeIntegrationTest extends TestCase
     /**
      * @group integration
      */
-    public function test_read_write_split_resolves_to_different_endpoints(): void
+    public function testReadWriteSplitResolvesToDifferentEndpoints(): void
     {
         $resolver = new EdgeMockReadWriteResolver();
         $resolver->registerDatabase('rw123', [
@@ -178,7 +178,7 @@ class EdgeIntegrationTest extends TestCase
     /**
      * @group integration
      */
-    public function test_read_write_split_disabled_uses_default_endpoint(): void
+    public function testReadWriteSplitDisabledUsesDefaultEndpoint(): void
     {
         $resolver = new EdgeMockReadWriteResolver();
         $resolver->registerDatabase('rw456', [
@@ -205,7 +205,7 @@ class EdgeIntegrationTest extends TestCase
     /**
      * @group integration
      */
-    public function test_transaction_pins_reads_to_primary_through_full_flow(): void
+    public function testTransactionPinsReadsToPrimaryThroughFullFlow(): void
     {
         $resolver = new EdgeMockReadWriteResolver();
         $resolver->registerDatabase('txdb', [
@@ -274,7 +274,7 @@ class EdgeIntegrationTest extends TestCase
     /**
      * @group integration
      */
-    public function test_failover_resolver_uses_secondary_on_primary_failure(): void
+    public function testFailoverResolverUsesSecondaryOnPrimaryFailure(): void
     {
         $primaryResolver = new EdgeMockResolver();
         // Primary has no databases registered, so it will throw NOT_FOUND
@@ -301,7 +301,7 @@ class EdgeIntegrationTest extends TestCase
     /**
      * @group integration
      */
-    public function test_failover_resolver_uses_primary_when_available(): void
+    public function testFailoverResolverUsesPrimaryWhenAvailable(): void
     {
         $primaryResolver = new EdgeMockResolver();
         $primaryResolver->registerDatabase('okdb', [
@@ -333,7 +333,7 @@ class EdgeIntegrationTest extends TestCase
     /**
      * @group integration
      */
-    public function test_failover_resolver_propagates_error_when_both_fail(): void
+    public function testFailoverResolverPropagatesErrorWhenBothFail(): void
     {
         $primaryResolver = new EdgeMockResolver();
         $secondaryResolver = new EdgeMockResolver();
@@ -353,7 +353,7 @@ class EdgeIntegrationTest extends TestCase
     /**
      * @group integration
      */
-    public function test_failover_resolver_handles_unavailable_primary(): void
+    public function testFailoverResolverHandlesUnavailablePrimary(): void
     {
         $primaryResolver = new EdgeMockResolver();
         $primaryResolver->setUnavailable(true);
@@ -384,7 +384,7 @@ class EdgeIntegrationTest extends TestCase
     /**
      * @group integration
      */
-    public function test_routing_cache_returns_cached_result_on_repeat(): void
+    public function testRoutingCacheReturnsCachedResultOnRepeat(): void
     {
         $resolver = new EdgeMockResolver();
         $resolver->registerDatabase('cachedb', [
@@ -417,7 +417,7 @@ class EdgeIntegrationTest extends TestCase
     /**
      * @group integration
      */
-    public function test_cache_invalidation_forces_re_resolve(): void
+    public function testCacheInvalidationForcesReResolve(): void
     {
         $resolver = new EdgeMockResolver();
         $resolver->registerDatabase('invaldb', [
@@ -455,7 +455,7 @@ class EdgeIntegrationTest extends TestCase
     /**
      * @group integration
      */
-    public function test_different_databases_resolve_independently(): void
+    public function testDifferentDatabasesResolveIndependently(): void
     {
         $resolver = new EdgeMockResolver();
         $resolver->registerDatabase('db1', [
@@ -489,7 +489,7 @@ class EdgeIntegrationTest extends TestCase
     /**
      * @group integration
      */
-    public function test_concurrent_resolution_of_multiple_databases(): void
+    public function testConcurrentResolutionOfMultipleDatabases(): void
     {
         $resolver = new EdgeMockResolver();
         $databaseCount = 20;
@@ -527,7 +527,7 @@ class EdgeIntegrationTest extends TestCase
     /**
      * @group integration
      */
-    public function test_concurrent_resolution_with_mixed_success_and_failure(): void
+    public function testConcurrentResolutionWithMixedSuccessAndFailure(): void
     {
         $resolver = new EdgeMockResolver();
         $resolver->registerDatabase('gooddb1', [
@@ -572,7 +572,7 @@ class EdgeIntegrationTest extends TestCase
     /**
      * @group integration
      */
-    public function test_connect_and_disconnect_lifecycle_tracked(): void
+    public function testConnectAndDisconnectLifecycleTracked(): void
     {
         $resolver = new EdgeMockResolver();
         $resolver->registerDatabase('lifecycle1', [
@@ -607,7 +607,7 @@ class EdgeIntegrationTest extends TestCase
     /**
      * @group integration
      */
-    public function test_stats_aggregate_across_operations(): void
+    public function testStatsAggregateAcrossOperations(): void
     {
         $resolver = new EdgeMockResolver();
         $resolver->registerDatabase('statsdb', [

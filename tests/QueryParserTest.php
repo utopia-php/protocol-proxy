@@ -69,121 +69,121 @@ class QueryParserTest extends TestCase
         return 'E' . \pack('N', $length) . $body;
     }
 
-    public function test_pg_select_query(): void
+    public function testPgSelectQuery(): void
     {
         $data = $this->buildPgQuery('SELECT * FROM users WHERE id = 1');
         $this->assertSame(QueryType::Read, $this->pgParser->parse($data));
     }
 
-    public function test_pg_select_lowercase(): void
+    public function testPgSelectLowercase(): void
     {
         $data = $this->buildPgQuery('select id, name from users');
         $this->assertSame(QueryType::Read, $this->pgParser->parse($data));
     }
 
-    public function test_pg_select_mixed_case(): void
+    public function testPgSelectMixedCase(): void
     {
         $data = $this->buildPgQuery('SeLeCt * FROM users');
         $this->assertSame(QueryType::Read, $this->pgParser->parse($data));
     }
 
-    public function test_pg_show_query(): void
+    public function testPgShowQuery(): void
     {
         $data = $this->buildPgQuery('SHOW TABLES');
         $this->assertSame(QueryType::Read, $this->pgParser->parse($data));
     }
 
-    public function test_pg_describe_query(): void
+    public function testPgDescribeQuery(): void
     {
         $data = $this->buildPgQuery('DESCRIBE users');
         $this->assertSame(QueryType::Read, $this->pgParser->parse($data));
     }
 
-    public function test_pg_explain_query(): void
+    public function testPgExplainQuery(): void
     {
         $data = $this->buildPgQuery('EXPLAIN SELECT * FROM users');
         $this->assertSame(QueryType::Read, $this->pgParser->parse($data));
     }
 
-    public function test_pg_table_query(): void
+    public function testPgTableQuery(): void
     {
         $data = $this->buildPgQuery('TABLE users');
         $this->assertSame(QueryType::Read, $this->pgParser->parse($data));
     }
 
-    public function test_pg_values_query(): void
+    public function testPgValuesQuery(): void
     {
         $data = $this->buildPgQuery("VALUES (1, 'a'), (2, 'b')");
         $this->assertSame(QueryType::Read, $this->pgParser->parse($data));
     }
 
-    public function test_pg_insert_query(): void
+    public function testPgInsertQuery(): void
     {
         $data = $this->buildPgQuery("INSERT INTO users (name) VALUES ('test')");
         $this->assertSame(QueryType::Write, $this->pgParser->parse($data));
     }
 
-    public function test_pg_update_query(): void
+    public function testPgUpdateQuery(): void
     {
         $data = $this->buildPgQuery("UPDATE users SET name = 'test' WHERE id = 1");
         $this->assertSame(QueryType::Write, $this->pgParser->parse($data));
     }
 
-    public function test_pg_delete_query(): void
+    public function testPgDeleteQuery(): void
     {
         $data = $this->buildPgQuery('DELETE FROM users WHERE id = 1');
         $this->assertSame(QueryType::Write, $this->pgParser->parse($data));
     }
 
-    public function test_pg_create_table(): void
+    public function testPgCreateTable(): void
     {
         $data = $this->buildPgQuery('CREATE TABLE test (id INT PRIMARY KEY)');
         $this->assertSame(QueryType::Write, $this->pgParser->parse($data));
     }
 
-    public function test_pg_drop_table(): void
+    public function testPgDropTable(): void
     {
         $data = $this->buildPgQuery('DROP TABLE IF EXISTS test');
         $this->assertSame(QueryType::Write, $this->pgParser->parse($data));
     }
 
-    public function test_pg_alter_table(): void
+    public function testPgAlterTable(): void
     {
         $data = $this->buildPgQuery('ALTER TABLE users ADD COLUMN email TEXT');
         $this->assertSame(QueryType::Write, $this->pgParser->parse($data));
     }
 
-    public function test_pg_truncate(): void
+    public function testPgTruncate(): void
     {
         $data = $this->buildPgQuery('TRUNCATE TABLE users');
         $this->assertSame(QueryType::Write, $this->pgParser->parse($data));
     }
 
-    public function test_pg_grant(): void
+    public function testPgGrant(): void
     {
         $data = $this->buildPgQuery('GRANT SELECT ON users TO readonly');
         $this->assertSame(QueryType::Write, $this->pgParser->parse($data));
     }
 
-    public function test_pg_revoke(): void
+    public function testPgRevoke(): void
     {
         $data = $this->buildPgQuery('REVOKE ALL ON users FROM public');
         $this->assertSame(QueryType::Write, $this->pgParser->parse($data));
     }
 
-    public function test_pg_lock_table(): void
+    public function testPgLockTable(): void
     {
         $data = $this->buildPgQuery('LOCK TABLE users IN ACCESS EXCLUSIVE MODE');
         $this->assertSame(QueryType::Write, $this->pgParser->parse($data));
     }
 
-    public function test_pg_call(): void
+    public function testPgCall(): void
     {
         $data = $this->buildPgQuery('CALL my_procedure()');
         $this->assertSame(QueryType::Write, $this->pgParser->parse($data));
     }
 
-    public function test_pg_do(): void
+    public function testPgDo(): void
     {
         $data = $this->buildPgQuery("DO $$ BEGIN RAISE NOTICE 'hello'; END $$");
         $this->assertSame(QueryType::Write, $this->pgParser->parse($data));
@@ -193,43 +193,43 @@ class QueryParserTest extends TestCase
     // PostgreSQL Transaction Commands
     // ---------------------------------------------------------------
 
-    public function test_pg_begin_transaction(): void
+    public function testPgBeginTransaction(): void
     {
         $data = $this->buildPgQuery('BEGIN');
         $this->assertSame(QueryType::TransactionBegin, $this->pgParser->parse($data));
     }
 
-    public function test_pg_start_transaction(): void
+    public function testPgStartTransaction(): void
     {
         $data = $this->buildPgQuery('START TRANSACTION');
         $this->assertSame(QueryType::TransactionBegin, $this->pgParser->parse($data));
     }
 
-    public function test_pg_commit(): void
+    public function testPgCommit(): void
     {
         $data = $this->buildPgQuery('COMMIT');
         $this->assertSame(QueryType::TransactionEnd, $this->pgParser->parse($data));
     }
 
-    public function test_pg_rollback(): void
+    public function testPgRollback(): void
     {
         $data = $this->buildPgQuery('ROLLBACK');
         $this->assertSame(QueryType::TransactionEnd, $this->pgParser->parse($data));
     }
 
-    public function test_pg_savepoint(): void
+    public function testPgSavepoint(): void
     {
         $data = $this->buildPgQuery('SAVEPOINT sp1');
         $this->assertSame(QueryType::Transaction, $this->pgParser->parse($data));
     }
 
-    public function test_pg_release_savepoint(): void
+    public function testPgReleaseSavepoint(): void
     {
         $data = $this->buildPgQuery('RELEASE SAVEPOINT sp1');
         $this->assertSame(QueryType::Transaction, $this->pgParser->parse($data));
     }
 
-    public function test_pg_set_command(): void
+    public function testPgSetCommand(): void
     {
         $data = $this->buildPgQuery("SET search_path TO 'public'");
         $this->assertSame(QueryType::Transaction, $this->pgParser->parse($data));
@@ -239,19 +239,19 @@ class QueryParserTest extends TestCase
     // PostgreSQL Extended Query Protocol
     // ---------------------------------------------------------------
 
-    public function test_pg_parse_message_routes_to_write(): void
+    public function testPgParseMessageRoutesToWrite(): void
     {
         $data = $this->buildPgParse('stmt1', 'SELECT * FROM users');
         $this->assertSame(QueryType::Write, $this->pgParser->parse($data));
     }
 
-    public function test_pg_bind_message_routes_to_write(): void
+    public function testPgBindMessageRoutesToWrite(): void
     {
         $data = $this->buildPgBind();
         $this->assertSame(QueryType::Write, $this->pgParser->parse($data));
     }
 
-    public function test_pg_execute_message_routes_to_write(): void
+    public function testPgExecuteMessageRoutesToWrite(): void
     {
         $data = $this->buildPgExecute();
         $this->assertSame(QueryType::Write, $this->pgParser->parse($data));
@@ -261,12 +261,12 @@ class QueryParserTest extends TestCase
     // PostgreSQL Edge Cases
     // ---------------------------------------------------------------
 
-    public function test_pg_too_short_packet(): void
+    public function testPgTooShortPacket(): void
     {
         $this->assertSame(QueryType::Unknown, $this->pgParser->parse('Q'));
     }
 
-    public function test_pg_unknown_message_type(): void
+    public function testPgUnknownMessageType(): void
     {
         $data = 'X' . \pack('N', 5) . "\x00";
         $this->assertSame(QueryType::Unknown, $this->pgParser->parse($data));
@@ -315,79 +315,79 @@ class QueryParserTest extends TestCase
         return $header . "\x17" . $body;
     }
 
-    public function test_mysql_select_query(): void
+    public function testMysqlSelectQuery(): void
     {
         $data = $this->buildMySQLQuery('SELECT * FROM users WHERE id = 1');
         $this->assertSame(QueryType::Read, $this->mysqlParser->parse($data));
     }
 
-    public function test_mysql_select_lowercase(): void
+    public function testMysqlSelectLowercase(): void
     {
         $data = $this->buildMySQLQuery('select id from users');
         $this->assertSame(QueryType::Read, $this->mysqlParser->parse($data));
     }
 
-    public function test_mysql_show_query(): void
+    public function testMysqlShowQuery(): void
     {
         $data = $this->buildMySQLQuery('SHOW DATABASES');
         $this->assertSame(QueryType::Read, $this->mysqlParser->parse($data));
     }
 
-    public function test_mysql_describe_query(): void
+    public function testMysqlDescribeQuery(): void
     {
         $data = $this->buildMySQLQuery('DESCRIBE users');
         $this->assertSame(QueryType::Read, $this->mysqlParser->parse($data));
     }
 
-    public function test_mysql_desc_query(): void
+    public function testMysqlDescQuery(): void
     {
         $data = $this->buildMySQLQuery('DESC users');
         $this->assertSame(QueryType::Read, $this->mysqlParser->parse($data));
     }
 
-    public function test_mysql_explain_query(): void
+    public function testMysqlExplainQuery(): void
     {
         $data = $this->buildMySQLQuery('EXPLAIN SELECT * FROM users');
         $this->assertSame(QueryType::Read, $this->mysqlParser->parse($data));
     }
 
-    public function test_mysql_insert_query(): void
+    public function testMysqlInsertQuery(): void
     {
         $data = $this->buildMySQLQuery("INSERT INTO users (name) VALUES ('test')");
         $this->assertSame(QueryType::Write, $this->mysqlParser->parse($data));
     }
 
-    public function test_mysql_update_query(): void
+    public function testMysqlUpdateQuery(): void
     {
         $data = $this->buildMySQLQuery("UPDATE users SET name = 'test' WHERE id = 1");
         $this->assertSame(QueryType::Write, $this->mysqlParser->parse($data));
     }
 
-    public function test_mysql_delete_query(): void
+    public function testMysqlDeleteQuery(): void
     {
         $data = $this->buildMySQLQuery('DELETE FROM users WHERE id = 1');
         $this->assertSame(QueryType::Write, $this->mysqlParser->parse($data));
     }
 
-    public function test_mysql_create_table(): void
+    public function testMysqlCreateTable(): void
     {
         $data = $this->buildMySQLQuery('CREATE TABLE test (id INT PRIMARY KEY)');
         $this->assertSame(QueryType::Write, $this->mysqlParser->parse($data));
     }
 
-    public function test_mysql_drop_table(): void
+    public function testMysqlDropTable(): void
     {
         $data = $this->buildMySQLQuery('DROP TABLE test');
         $this->assertSame(QueryType::Write, $this->mysqlParser->parse($data));
     }
 
-    public function test_mysql_alter_table(): void
+    public function testMysqlAlterTable(): void
     {
         $data = $this->buildMySQLQuery('ALTER TABLE users ADD COLUMN email VARCHAR(255)');
         $this->assertSame(QueryType::Write, $this->mysqlParser->parse($data));
     }
 
-    public function test_mysql_truncate(): void
+    public function testMysqlTruncate(): void
     {
         $data = $this->buildMySQLQuery('TRUNCATE TABLE users');
         $this->assertSame(QueryType::Write, $this->mysqlParser->parse($data));
@@ -397,31 +397,31 @@ class QueryParserTest extends TestCase
     // MySQL Transaction Commands
     // ---------------------------------------------------------------
 
-    public function test_mysql_begin_transaction(): void
+    public function testMysqlBeginTransaction(): void
     {
         $data = $this->buildMySQLQuery('BEGIN');
         $this->assertSame(QueryType::TransactionBegin, $this->mysqlParser->parse($data));
     }
 
-    public function test_mysql_start_transaction(): void
+    public function testMysqlStartTransaction(): void
     {
         $data = $this->buildMySQLQuery('START TRANSACTION');
         $this->assertSame(QueryType::TransactionBegin, $this->mysqlParser->parse($data));
     }
 
-    public function test_mysql_commit(): void
+    public function testMysqlCommit(): void
     {
         $data = $this->buildMySQLQuery('COMMIT');
         $this->assertSame(QueryType::TransactionEnd, $this->mysqlParser->parse($data));
     }
 
-    public function test_mysql_rollback(): void
+    public function testMysqlRollback(): void
     {
         $data = $this->buildMySQLQuery('ROLLBACK');
         $this->assertSame(QueryType::TransactionEnd, $this->mysqlParser->parse($data));
     }
 
-    public function test_mysql_set_command(): void
+    public function testMysqlSetCommand(): void
     {
         $data = $this->buildMySQLQuery("SET autocommit = 0");
         $this->assertSame(QueryType::Transaction, $this->mysqlParser->parse($data));
@@ -431,13 +431,13 @@ class QueryParserTest extends TestCase
     // MySQL Prepared Statement Protocol
     // ---------------------------------------------------------------
 
-    public function test_mysql_stmt_prepare_routes_to_write(): void
+    public function testMysqlStmtPrepareRoutesToWrite(): void
     {
         $data = $this->buildMySQLStmtPrepare('SELECT * FROM users WHERE id = ?');
         $this->assertSame(QueryType::Write, $this->mysqlParser->parse($data));
     }
 
-    public function test_mysql_stmt_execute_routes_to_write(): void
+    public function testMysqlStmtExecuteRoutesToWrite(): void
     {
         $data = $this->buildMySQLStmtExecute(1);
         $this->assertSame(QueryType::Write, $this->mysqlParser->parse($data));
@@ -447,12 +447,12 @@ class QueryParserTest extends TestCase
     // MySQL Edge Cases
     // ---------------------------------------------------------------
 
-    public function test_mysql_too_short_packet(): void
+    public function testMysqlTooShortPacket(): void
     {
         $this->assertSame(QueryType::Unknown, $this->mysqlParser->parse("\x00\x00"));
     }
 
-    public function test_mysql_unknown_command(): void
+    public function testMysqlUnknownCommand(): void
     {
         // COM_QUIT = 0x01
         $header = \pack('V', 1);
@@ -465,55 +465,55 @@ class QueryParserTest extends TestCase
     // SQL Classification (classifySQL) — Edge Cases
     // ---------------------------------------------------------------
 
-    public function test_classify_leading_whitespace(): void
+    public function testClassifyLeadingWhitespace(): void
     {
         $this->assertSame(QueryType::Read, $this->pgParser->classifySQL("   \t\n  SELECT * FROM users"));
     }
 
-    public function test_classify_leading_line_comment(): void
+    public function testClassifyLeadingLineComment(): void
     {
         $this->assertSame(QueryType::Read, $this->pgParser->classifySQL("-- this is a comment\nSELECT * FROM users"));
     }
 
-    public function test_classify_leading_block_comment(): void
+    public function testClassifyLeadingBlockComment(): void
     {
         $this->assertSame(QueryType::Read, $this->pgParser->classifySQL("/* block comment */ SELECT * FROM users"));
     }
 
-    public function test_classify_multiple_comments(): void
+    public function testClassifyMultipleComments(): void
     {
         $sql = "-- line comment\n/* block comment */\n  -- another line\n  SELECT 1";
         $this->assertSame(QueryType::Read, $this->pgParser->classifySQL($sql));
     }
 
-    public function test_classify_nested_block_comment(): void
+    public function testClassifyNestedBlockComment(): void
     {
         // Note: SQL standard doesn't support nested block comments; parser stops at first */
         $sql = "/* outer /* inner */ SELECT 1";
         $this->assertSame(QueryType::Read, $this->pgParser->classifySQL($sql));
     }
 
-    public function test_classify_empty_query(): void
+    public function testClassifyEmptyQuery(): void
     {
         $this->assertSame(QueryType::Unknown, $this->pgParser->classifySQL(''));
     }
 
-    public function test_classify_whitespace_only(): void
+    public function testClassifyWhitespaceOnly(): void
     {
         $this->assertSame(QueryType::Unknown, $this->pgParser->classifySQL("   \t\n  "));
     }
 
-    public function test_classify_comment_only(): void
+    public function testClassifyCommentOnly(): void
     {
         $this->assertSame(QueryType::Unknown, $this->pgParser->classifySQL('-- just a comment'));
     }
 
-    public function test_classify_select_with_parenthesis(): void
+    public function testClassifySelectWithParenthesis(): void
     {
         $this->assertSame(QueryType::Read, $this->pgParser->classifySQL('SELECT(1)'));
     }
 
-    public function test_classify_select_with_semicolon(): void
+    public function testClassifySelectWithSemicolon(): void
     {
         $this->assertSame(QueryType::Read, $this->pgParser->classifySQL('SELECT;'));
     }
@@ -522,17 +522,17 @@ class QueryParserTest extends TestCase
     // COPY Direction Classification
     // ---------------------------------------------------------------
 
-    public function test_classify_copy_to(): void
+    public function testClassifyCopyTo(): void
     {
         $this->assertSame(QueryType::Read, $this->pgParser->classifySQL('COPY users TO STDOUT'));
     }
 
-    public function test_classify_copy_from(): void
+    public function testClassifyCopyFrom(): void
     {
         $this->assertSame(QueryType::Write, $this->pgParser->classifySQL("COPY users FROM '/tmp/data.csv'"));
     }
 
-    public function test_classify_copy_ambiguous(): void
+    public function testClassifyCopyAmbiguous(): void
     {
         // No direction keyword - defaults to WRITE for safety
         $this->assertSame(QueryType::Write, $this->pgParser->classifySQL('COPY users'));
@@ -542,37 +542,37 @@ class QueryParserTest extends TestCase
     // CTE (WITH) Classification
     // ---------------------------------------------------------------
 
-    public function test_classify_cte_with_select(): void
+    public function testClassifyCteWithSelect(): void
     {
         $sql = 'WITH active_users AS (SELECT * FROM users WHERE active = true) SELECT * FROM active_users';
         $this->assertSame(QueryType::Read, $this->pgParser->classifySQL($sql));
     }
 
-    public function test_classify_cte_with_insert(): void
+    public function testClassifyCteWithInsert(): void
     {
         $sql = 'WITH new_data AS (SELECT 1 AS id) INSERT INTO users SELECT * FROM new_data';
         $this->assertSame(QueryType::Write, $this->pgParser->classifySQL($sql));
     }
 
-    public function test_classify_cte_with_update(): void
+    public function testClassifyCteWithUpdate(): void
     {
         $sql = 'WITH src AS (SELECT id FROM staging) UPDATE users SET active = true FROM src WHERE users.id = src.id';
         $this->assertSame(QueryType::Write, $this->pgParser->classifySQL($sql));
     }
 
-    public function test_classify_cte_with_delete(): void
+    public function testClassifyCteWithDelete(): void
     {
         $sql = 'WITH old AS (SELECT id FROM users WHERE created_at < now()) DELETE FROM users WHERE id IN (SELECT id FROM old)';
         $this->assertSame(QueryType::Write, $this->pgParser->classifySQL($sql));
     }
 
-    public function test_classify_cte_recursive_select(): void
+    public function testClassifyCteRecursiveSelect(): void
     {
         $sql = 'WITH RECURSIVE tree AS (SELECT id, parent_id FROM categories WHERE parent_id IS NULL UNION ALL SELECT c.id, c.parent_id FROM categories c JOIN tree t ON c.parent_id = t.id) SELECT * FROM tree';
         $this->assertSame(QueryType::Read, $this->pgParser->classifySQL($sql));
     }
 
-    public function test_classify_cte_no_final_keyword(): void
+    public function testClassifyCteNoFinalKeyword(): void
     {
         // Bare WITH with no recognizable final statement - defaults to READ
         $sql = 'WITH x AS (SELECT 1)';
@@ -583,32 +583,32 @@ class QueryParserTest extends TestCase
     // Keyword Extraction
     // ---------------------------------------------------------------
 
-    public function test_extract_keyword_simple(): void
+    public function testExtractKeywordSimple(): void
     {
         $this->assertSame('SELECT', $this->pgParser->extractKeyword('SELECT * FROM users'));
     }
 
-    public function test_extract_keyword_lowercase(): void
+    public function testExtractKeywordLowercase(): void
     {
         $this->assertSame('INSERT', $this->pgParser->extractKeyword('insert into users'));
     }
 
-    public function test_extract_keyword_with_whitespace(): void
+    public function testExtractKeywordWithWhitespace(): void
     {
         $this->assertSame('DELETE', $this->pgParser->extractKeyword("  \t\n  DELETE FROM users"));
     }
 
-    public function test_extract_keyword_with_comments(): void
+    public function testExtractKeywordWithComments(): void
     {
         $this->assertSame('UPDATE', $this->pgParser->extractKeyword("-- comment\nUPDATE users SET x = 1"));
     }
 
-    public function test_extract_keyword_empty(): void
+    public function testExtractKeywordEmpty(): void
     {
         $this->assertSame('', $this->pgParser->extractKeyword(''));
     }
 
-    public function test_extract_keyword_parenthesized(): void
+    public function testExtractKeywordParenthesized(): void
     {
         $this->assertSame('SELECT', $this->pgParser->extractKeyword('SELECT(1)'));
     }
@@ -617,7 +617,7 @@ class QueryParserTest extends TestCase
     // Performance
     // ---------------------------------------------------------------
 
-    public function test_parse_performance(): void
+    public function testParsePerformance(): void
     {
         $pgData = $this->buildPgQuery('SELECT * FROM users WHERE id = 1');
         $mysqlData = $this->buildMySQLQuery('SELECT * FROM users WHERE id = 1');
@@ -653,7 +653,7 @@ class QueryParserTest extends TestCase
         );
     }
 
-    public function test_classify_sql_performance(): void
+    public function testClassifySqlPerformance(): void
     {
         $queries = [
             'SELECT * FROM users WHERE id = 1',

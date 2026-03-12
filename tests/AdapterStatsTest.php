@@ -20,7 +20,7 @@ class AdapterStatsTest extends TestCase
         $this->resolver = new MockResolver();
     }
 
-    public function test_cache_hit_updates_stats(): void
+    public function testCacheHitUpdatesStats(): void
     {
         $this->resolver->setEndpoint('127.0.0.1:8080');
         $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
@@ -47,7 +47,7 @@ class AdapterStatsTest extends TestCase
         $this->assertGreaterThan(0, $stats['routingTableMemory']);
     }
 
-    public function test_routing_error_increments_stats(): void
+    public function testRoutingErrorIncrementsStats(): void
     {
         $this->resolver->setException(new ResolverException('No backend'));
         $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
@@ -66,7 +66,7 @@ class AdapterStatsTest extends TestCase
         $this->assertSame(0.0, $stats['cacheHitRate']);
     }
 
-    public function test_resolver_stats_are_included_in_adapter_stats(): void
+    public function testResolverStatsAreIncludedInAdapterStats(): void
     {
         $this->resolver->setEndpoint('127.0.0.1:8080');
         $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);

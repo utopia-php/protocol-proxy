@@ -8,7 +8,7 @@ use Utopia\Proxy\Protocol;
 
 class ConnectionResultTest extends TestCase
 {
-    public function test_connection_result_stores_values(): void
+    public function testConnectionResultStoresValues(): void
     {
         $result = new ConnectionResult(
             endpoint: '127.0.0.1:8080',

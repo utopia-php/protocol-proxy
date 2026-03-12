@@ -21,7 +21,7 @@ class AdapterActionsTest extends TestCase
         $this->resolver = new MockResolver();
     }
 
-    public function test_resolver_is_assigned_to_adapters(): void
+    public function testResolverIsAssignedToAdapters(): void
     {
         $http = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
         $tcp = new TCPAdapter($this->resolver, port: 5432);
@@ -32,7 +32,7 @@ class AdapterActionsTest extends TestCase
         $this->assertSame($this->resolver, $smtp->resolver);
     }
 
-    public function test_resolve_routes_and_returns_endpoint(): void
+    public function testResolveRoutesAndReturnsEndpoint(): void
     {
         $this->resolver->setEndpoint('127.0.0.1:8080');
         $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
@@ -44,7 +44,7 @@ class AdapterActionsTest extends TestCase
         $this->assertSame(Protocol::HTTP, $result->protocol);
     }
 
-    public function test_notify_connect_delegates_to_resolver(): void
+    public function testNotifyConnectDelegatesToResolver(): void
     {
         $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
 
@@ -56,7 +56,7 @@ class AdapterActionsTest extends TestCase
         $this->assertSame(['extra' => 'data'], $connects[0]['metadata']);
     }
 
-    public function test_notify_close_delegates_to_resolver(): void
+    public function testNotifyCloseDelegatesToResolver(): void
     {
         $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
 
@@ -68,7 +68,7 @@ class AdapterActionsTest extends TestCase
         $this->assertSame(['extra' => 'data'], $disconnects[0]['metadata']);
     }
 
-    public function test_track_activity_delegates_to_resolver_with_throttling(): void
+    public function testTrackActivityDelegatesToResolverWithThrottling(): void
     {
         $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
         $adapter->setActivityInterval(1); // 1 second throttle
@@ -89,7 +89,7 @@ class AdapterActionsTest extends TestCase
         $this->assertCount(2, $this->resolver->getActivities());
     }
 
-    public function test_routing_error_throws_exception(): void
+    public function testRoutingErrorThrowsException(): void
     {
         $this->resolver->setException(new ResolverException('No backend found'));
         $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
@@ -100,7 +100,7 @@ class AdapterActionsTest extends TestCase
         $adapter->route('api.example.com');
     }
 
-    public function test_empty_endpoint_throws_exception(): void
+    public function testEmptyEndpointThrowsException(): void
     {
         $this->resolver->setEndpoint('');
         $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
@@ -111,7 +111,7 @@ class AdapterActionsTest extends TestCase
         $adapter->route('api.example.com');
     }
 
-    public function test_skip_validation_allows_private_i_ps(): void
+    public function testSkipValidationAllowsPrivateIPs(): void
     {
         // 10.0.0.1 is a private IP that would normally be blocked
         $this->resolver->setEndpoint('10.0.0.1:8080');
