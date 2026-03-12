@@ -3,9 +3,9 @@
 namespace Utopia\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Utopia\Proxy\Adapter\HTTP\Swoole as HTTPAdapter;
-use Utopia\Proxy\Adapter\SMTP\Swoole as SMTPAdapter;
-use Utopia\Proxy\Adapter\TCP\Swoole as TCPAdapter;
+use Utopia\Proxy\Adapter;
+use Utopia\Proxy\Adapter\TCP as TCPAdapter;
+use Utopia\Proxy\Protocol;
 
 class AdapterMetadataTest extends TestCase
 {
@@ -22,20 +22,20 @@ class AdapterMetadataTest extends TestCase
 
     public function test_http_adapter_metadata(): void
     {
-        $adapter = new HTTPAdapter($this->resolver);
+        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP, description: 'HTTP proxy adapter');
 
         $this->assertSame('HTTP', $adapter->getName());
-        $this->assertSame('http', $adapter->getProtocol());
-        $this->assertSame('HTTP proxy adapter for routing requests to function containers', $adapter->getDescription());
+        $this->assertSame(Protocol::HTTP, $adapter->getProtocol());
+        $this->assertSame('HTTP proxy adapter', $adapter->getDescription());
     }
 
     public function test_smtp_adapter_metadata(): void
     {
-        $adapter = new SMTPAdapter($this->resolver);
+        $adapter = new Adapter($this->resolver, name: 'SMTP', protocol: Protocol::SMTP, description: 'SMTP proxy adapter');
 
         $this->assertSame('SMTP', $adapter->getName());
-        $this->assertSame('smtp', $adapter->getProtocol());
-        $this->assertSame('SMTP proxy adapter for email server routing', $adapter->getDescription());
+        $this->assertSame(Protocol::SMTP, $adapter->getProtocol());
+        $this->assertSame('SMTP proxy adapter', $adapter->getDescription());
     }
 
     public function test_tcp_adapter_metadata(): void
@@ -43,8 +43,8 @@ class AdapterMetadataTest extends TestCase
         $adapter = new TCPAdapter($this->resolver, port: 5432);
 
         $this->assertSame('TCP', $adapter->getName());
-        $this->assertSame('postgresql', $adapter->getProtocol());
-        $this->assertSame('TCP proxy adapter for database connections (PostgreSQL, MySQL)', $adapter->getDescription());
+        $this->assertSame(Protocol::PostgreSQL, $adapter->getProtocol());
+        $this->assertSame('TCP proxy adapter for database connections (PostgreSQL, MySQL, MongoDB)', $adapter->getDescription());
         $this->assertSame(5432, $adapter->port);
     }
 }

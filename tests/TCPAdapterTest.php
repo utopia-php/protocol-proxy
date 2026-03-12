@@ -3,7 +3,8 @@
 namespace Utopia\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Utopia\Proxy\Adapter\TCP\Swoole as TCPAdapter;
+use Utopia\Proxy\Adapter\TCP as TCPAdapter;
+use Utopia\Proxy\Protocol;
 
 class TCPAdapterTest extends TestCase
 {
@@ -24,7 +25,7 @@ class TCPAdapterTest extends TestCase
         $data = "user\x00appwrite\x00database\x00db-abc123\x00";
 
         $this->assertSame('abc123', $adapter->parseDatabaseId($data, 1));
-        $this->assertSame('postgresql', $adapter->getProtocol());
+        $this->assertSame(Protocol::PostgreSQL, $adapter->getProtocol());
     }
 
     public function test_my_sql_database_id_parsing(): void
@@ -33,7 +34,7 @@ class TCPAdapterTest extends TestCase
         $data = "\x00\x00\x00\x00\x02db-xyz789";
 
         $this->assertSame('xyz789', $adapter->parseDatabaseId($data, 1));
-        $this->assertSame('mysql', $adapter->getProtocol());
+        $this->assertSame(Protocol::MySQL, $adapter->getProtocol());
     }
 
     public function test_postgres_database_id_parsing_fails_on_invalid_data(): void

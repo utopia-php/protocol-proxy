@@ -3,8 +3,8 @@
 namespace Utopia\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Utopia\Proxy\Adapter\TCP\Swoole as TCPAdapter;
-use Utopia\Proxy\QueryParser;
+use Utopia\Proxy\Adapter\TCP as TCPAdapter;
+use Utopia\Query\Type as QueryType;
 
 class ReadWriteSplitTest extends TestCase
 {
@@ -80,7 +80,7 @@ class ReadWriteSplitTest extends TestCase
         $adapter->setReadWriteSplit(true);
 
         $data = $this->buildPgQuery('SELECT * FROM users');
-        $this->assertSame(QueryParser::READ, $adapter->classifyQuery($data, 1));
+        $this->assertSame(QueryType::Read, $adapter->classifyQuery($data, 1));
     }
 
     public function test_classify_pg_insert_as_write(): void
@@ -89,7 +89,7 @@ class ReadWriteSplitTest extends TestCase
         $adapter->setReadWriteSplit(true);
 
         $data = $this->buildPgQuery("INSERT INTO users (name) VALUES ('x')");
-        $this->assertSame(QueryParser::WRITE, $adapter->classifyQuery($data, 1));
+        $this->assertSame(QueryType::Write, $adapter->classifyQuery($data, 1));
     }
 
     public function test_classify_mysql_select_as_read(): void
@@ -98,7 +98,7 @@ class ReadWriteSplitTest extends TestCase
         $adapter->setReadWriteSplit(true);
 
         $data = $this->buildMySQLQuery('SELECT * FROM users');
-        $this->assertSame(QueryParser::READ, $adapter->classifyQuery($data, 1));
+        $this->assertSame(QueryType::Read, $adapter->classifyQuery($data, 1));
     }
 
     public function test_classify_mysql_insert_as_write(): void
@@ -107,7 +107,7 @@ class ReadWriteSplitTest extends TestCase
         $adapter->setReadWriteSplit(true);
 
         $data = $this->buildMySQLQuery("INSERT INTO users (name) VALUES ('x')");
-        $this->assertSame(QueryParser::WRITE, $adapter->classifyQuery($data, 1));
+        $this->assertSame(QueryType::Write, $adapter->classifyQuery($data, 1));
     }
 
     public function test_classify_returns_write_when_split_disabled(): void
@@ -116,7 +116,7 @@ class ReadWriteSplitTest extends TestCase
         // Read/write split is disabled by default
 
         $data = $this->buildPgQuery('SELECT * FROM users');
-        $this->assertSame(QueryParser::WRITE, $adapter->classifyQuery($data, 1));
+        $this->assertSame(QueryType::Write, $adapter->classifyQuery($data, 1));
     }
 
     // ---------------------------------------------------------------
@@ -136,7 +136,7 @@ class ReadWriteSplitTest extends TestCase
         // BEGIN pins
         $data = $this->buildPgQuery('BEGIN');
         $result = $adapter->classifyQuery($data, $clientFd);
-        $this->assertSame(QueryParser::WRITE, $result);
+        $this->assertSame(QueryType::Write, $result);
         $this->assertTrue($adapter->isConnectionPinned($clientFd));
     }
 
@@ -153,7 +153,7 @@ class ReadWriteSplitTest extends TestCase
 
         // SELECT should still route to WRITE when pinned
         $data = $this->buildPgQuery('SELECT * FROM users');
-        $this->assertSame(QueryParser::WRITE, $adapter->classifyQuery($data, $clientFd));
+        $this->assertSame(QueryType::Write, $adapter->classifyQuery($data, $clientFd));
     }
 
     public function test_commit_unpins_connection(): void
@@ -173,7 +173,7 @@ class ReadWriteSplitTest extends TestCase
 
         // Now SELECT should route to READ again
         $data = $this->buildPgQuery('SELECT * FROM users');
-        $this->assertSame(QueryParser::READ, $adapter->classifyQuery($data, $clientFd));
+        $this->assertSame(QueryType::Read, $adapter->classifyQuery($data, $clientFd));
     }
 
     public function test_rollback_unpins_connection(): void
@@ -260,10 +260,10 @@ class ReadWriteSplitTest extends TestCase
         $this->assertFalse($adapter->isConnectionPinned($fd2));
 
         // fd2 can still read
-        $this->assertSame(QueryParser::READ, $adapter->classifyQuery($this->buildPgQuery('SELECT 1'), $fd2));
+        $this->assertSame(QueryType::Read, $adapter->classifyQuery($this->buildPgQuery('SELECT 1'), $fd2));
 
         // fd1 is pinned to write
-        $this->assertSame(QueryParser::WRITE, $adapter->classifyQuery($this->buildPgQuery('SELECT 1'), $fd1));
+        $this->assertSame(QueryType::Write, $adapter->classifyQuery($this->buildPgQuery('SELECT 1'), $fd1));
     }
 
     // ---------------------------------------------------------------
@@ -280,7 +280,7 @@ class ReadWriteSplitTest extends TestCase
         $adapter->setReadWriteSplit(true);
         $adapter->setSkipValidation(true);
 
-        $result = $adapter->routeQuery('test-db', QueryParser::READ);
+        $result = $adapter->routeQuery('test-db', QueryType::Read);
         $this->assertSame('replica.db:5432', $result->endpoint);
         $this->assertSame('read', $result->metadata['route']);
     }
@@ -295,7 +295,7 @@ class ReadWriteSplitTest extends TestCase
         $adapter->setReadWriteSplit(true);
         $adapter->setSkipValidation(true);
 
-        $result = $adapter->routeQuery('test-db', QueryParser::WRITE);
+        $result = $adapter->routeQuery('test-db', QueryType::Write);
         $this->assertSame('primary.db:5432', $result->endpoint);
         $this->assertSame('write', $result->metadata['route']);
     }
@@ -310,7 +310,7 @@ class ReadWriteSplitTest extends TestCase
         // read/write split is disabled
         $adapter->setSkipValidation(true);
 
-        $result = $adapter->routeQuery('test-db', QueryParser::READ);
+        $result = $adapter->routeQuery('test-db', QueryType::Read);
         $this->assertSame('default.db:5432', $result->endpoint);
     }
 
@@ -323,7 +323,7 @@ class ReadWriteSplitTest extends TestCase
         $adapter->setSkipValidation(true);
 
         // Even with read/write split enabled, basic resolver uses default route()
-        $result = $adapter->routeQuery('test-db', QueryParser::READ);
+        $result = $adapter->routeQuery('test-db', QueryType::Read);
         $this->assertSame('default.db:5432', $result->endpoint);
     }
 
@@ -340,7 +340,7 @@ class ReadWriteSplitTest extends TestCase
 
         // SET is a transaction-class command, routes to primary
         $result = $adapter->classifyQuery($this->buildPgQuery("SET search_path = 'public'"), $clientFd);
-        $this->assertSame(QueryParser::WRITE, $result);
+        $this->assertSame(QueryType::Write, $result);
 
         // But SET should not pin the connection (only BEGIN/START pin)
         $this->assertFalse($adapter->isConnectionPinned($clientFd));
@@ -358,6 +358,6 @@ class ReadWriteSplitTest extends TestCase
         // Use an unknown PG message type
         $data = 'X' . \pack('N', 5) . "\x00";
         $result = $adapter->classifyQuery($data, 1);
-        $this->assertSame(QueryParser::WRITE, $result);
+        $this->assertSame(QueryType::Write, $result);
     }
 }

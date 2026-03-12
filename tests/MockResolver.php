@@ -78,12 +78,12 @@ class MockResolver implements Resolver
     /**
      * @param  array<string, mixed>  $metadata
      */
-    public function trackActivity(string $resourceId, array $metadata = []): void
+    public function track(string $resourceId, array $metadata = []): void
     {
         $this->activities[] = ['resourceId' => $resourceId, 'metadata' => $metadata];
     }
 
-    public function invalidateCache(string $resourceId): void
+    public function purge(string $resourceId): void
     {
         $this->invalidations[] = $resourceId;
     }

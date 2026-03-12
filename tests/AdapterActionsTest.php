@@ -3,9 +3,9 @@
 namespace Utopia\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Utopia\Proxy\Adapter\HTTP\Swoole as HTTPAdapter;
-use Utopia\Proxy\Adapter\SMTP\Swoole as SMTPAdapter;
-use Utopia\Proxy\Adapter\TCP\Swoole as TCPAdapter;
+use Utopia\Proxy\Adapter;
+use Utopia\Proxy\Adapter\TCP as TCPAdapter;
+use Utopia\Proxy\Protocol;
 use Utopia\Proxy\Resolver\Exception as ResolverException;
 
 class AdapterActionsTest extends TestCase
@@ -23,9 +23,9 @@ class AdapterActionsTest extends TestCase
 
     public function test_resolver_is_assigned_to_adapters(): void
     {
-        $http = new HTTPAdapter($this->resolver);
+        $http = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
         $tcp = new TCPAdapter($this->resolver, port: 5432);
-        $smtp = new SMTPAdapter($this->resolver);
+        $smtp = new Adapter($this->resolver, name: 'SMTP', protocol: Protocol::SMTP);
 
         $this->assertSame($this->resolver, $http->resolver);
         $this->assertSame($this->resolver, $tcp->resolver);
@@ -35,18 +35,18 @@ class AdapterActionsTest extends TestCase
     public function test_resolve_routes_and_returns_endpoint(): void
     {
         $this->resolver->setEndpoint('127.0.0.1:8080');
-        $adapter = new HTTPAdapter($this->resolver);
+        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
 
         $result = $adapter->route('api.example.com');
 
         $this->assertSame('127.0.0.1:8080', $result->endpoint);
-        $this->assertSame('http', $result->protocol);
+        $this->assertSame(Protocol::HTTP, $result->protocol);
     }
 
     public function test_notify_connect_delegates_to_resolver(): void
     {
-        $adapter = new HTTPAdapter($this->resolver);
+        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
 
         $adapter->notifyConnect('resource-123', ['extra' => 'data']);
 
@@ -58,7 +58,7 @@ class AdapterActionsTest extends TestCase
 
     public function test_notify_close_delegates_to_resolver(): void
     {
-        $adapter = new HTTPAdapter($this->resolver);
+        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
 
         $adapter->notifyClose('resource-123', ['extra' => 'data']);
 
@@ -70,29 +70,29 @@ class AdapterActionsTest extends TestCase
 
     public function test_track_activity_delegates_to_resolver_with_throttling(): void
     {
-        $adapter = new HTTPAdapter($this->resolver);
+        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
         $adapter->setActivityInterval(1); // 1 second throttle
 
         // First call should trigger activity tracking
-        $adapter->trackActivity('resource-123');
+        $adapter->track('resource-123');
         $this->assertCount(1, $this->resolver->getActivities());
 
         // Immediate second call should be throttled
-        $adapter->trackActivity('resource-123');
+        $adapter->track('resource-123');
         $this->assertCount(1, $this->resolver->getActivities());
 
         // Wait for throttle interval to pass
         sleep(2);
 
         // Third call should trigger activity tracking
-        $adapter->trackActivity('resource-123');
+        $adapter->track('resource-123');
         $this->assertCount(2, $this->resolver->getActivities());
     }
 
     public function test_routing_error_throws_exception(): void
     {
         $this->resolver->setException(new ResolverException('No backend found'));
-        $adapter = new HTTPAdapter($this->resolver);
+        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
 
         $this->expectException(ResolverException::class);
         $this->expectExceptionMessage('No backend found');
@@ -103,7 +103,7 @@ class AdapterActionsTest extends TestCase
     public function test_empty_endpoint_throws_exception(): void
     {
         $this->resolver->setEndpoint('');
-        $adapter = new HTTPAdapter($this->resolver);
+        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
 
         $this->expectException(ResolverException::class);
         $this->expectExceptionMessage('Resolver returned empty endpoint');
@@ -115,7 +115,7 @@ class AdapterActionsTest extends TestCase
     {
         // 10.0.0.1 is a private IP that would normally be blocked
         $this->resolver->setEndpoint('10.0.0.1:8080');
-        $adapter = new HTTPAdapter($this->resolver);
+        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
 
         // Should not throw exception with validation disabled

@@ -3,7 +3,8 @@
 namespace Utopia\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Utopia\Proxy\Adapter\HTTP\Swoole as HTTPAdapter;
+use Utopia\Proxy\Adapter;
+use Utopia\Proxy\Protocol;
 use Utopia\Proxy\Resolver\Exception as ResolverException;
 
 class AdapterStatsTest extends TestCase
@@ -22,7 +23,7 @@ class AdapterStatsTest extends TestCase
     public function test_cache_hit_updates_stats(): void
     {
         $this->resolver->setEndpoint('127.0.0.1:8080');
-        $adapter = new HTTPAdapter($this->resolver);
+        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
 
         $start = time();
@@ -38,18 +39,18 @@ class AdapterStatsTest extends TestCase
 
         $stats = $adapter->getStats();
         $this->assertSame(2, $stats['connections']);
-        $this->assertSame(1, $stats['cache_hits']);
-        $this->assertSame(1, $stats['cache_misses']);
-        $this->assertSame(50.0, $stats['cache_hit_rate']);
-        $this->assertSame(0, $stats['routing_errors']);
-        $this->assertSame(1, $stats['routing_table_size']);
-        $this->assertGreaterThan(0, $stats['routing_table_memory']);
+        $this->assertSame(1, $stats['cacheHits']);
+        $this->assertSame(1, $stats['cacheMisses']);
+        $this->assertSame(50.0, $stats['cacheHitRate']);
+        $this->assertSame(0, $stats['routingErrors']);
+        $this->assertSame(1, $stats['routingTableSize']);
+        $this->assertGreaterThan(0, $stats['routingTableMemory']);
     }
 
     public function test_routing_error_increments_stats(): void
     {
         $this->resolver->setException(new ResolverException('No backend'));
-        $adapter = new HTTPAdapter($this->resolver);
+        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
 
         try {
             $adapter->route('api.example.com');
@@ -59,16 +60,16 @@ class AdapterStatsTest extends TestCase
         }
 
         $stats = $adapter->getStats();
-        $this->assertSame(1, $stats['routing_errors']);
-        $this->assertSame(1, $stats['cache_misses']);
-        $this->assertSame(0, $stats['cache_hits']);
-        $this->assertSame(0.0, $stats['cache_hit_rate']);
+        $this->assertSame(1, $stats['routingErrors']);
+        $this->assertSame(1, $stats['cacheMisses']);
+        $this->assertSame(0, $stats['cacheHits']);
+        $this->assertSame(0.0, $stats['cacheHitRate']);
     }
 
     public function test_resolver_stats_are_included_in_adapter_stats(): void
     {
         $this->resolver->setEndpoint('127.0.0.1:8080');
-        $adapter = new HTTPAdapter($this->resolver);
+        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
 
         $adapter->route('api.example.com');

@@ -3,9 +3,10 @@
 namespace Utopia\Tests\Integration;
 
 use PHPUnit\Framework\TestCase;
-use Utopia\Proxy\Adapter\TCP\Swoole as TCPAdapter;
+use Utopia\Proxy\Adapter\TCP as TCPAdapter;
 use Utopia\Proxy\ConnectionResult;
-use Utopia\Proxy\QueryParser;
+use Utopia\Proxy\Protocol;
+use Utopia\Query\Type as QueryType;
 use Utopia\Proxy\Resolver;
 use Utopia\Proxy\Resolver\Exception as ResolverException;
 use Utopia\Proxy\Resolver\ReadWriteResolver;
@@ -54,7 +55,7 @@ class EdgeIntegrationTest extends TestCase
 
         $this->assertInstanceOf(ConnectionResult::class, $result);
         $this->assertSame('10.0.1.50:5432', $result->endpoint);
-        $this->assertSame('postgresql', $result->protocol);
+        $this->assertSame(Protocol::PostgreSQL, $result->protocol);
         $this->assertSame('abc123', $result->metadata['resourceId']);
         $this->assertSame('appwrite_user', $result->metadata['username']);
         $this->assertFalse($result->metadata['cached']);
@@ -126,7 +127,7 @@ class EdgeIntegrationTest extends TestCase
 
         $result = $adapter->route($databaseId);
         $this->assertSame('10.0.2.30:3306', $result->endpoint);
-        $this->assertSame('mysql', $result->protocol);
+        $this->assertSame(Protocol::MySQL, $result->protocol);
     }
 
     // ---------------------------------------------------------------
@@ -162,11 +163,11 @@ class EdgeIntegrationTest extends TestCase
         $adapter->setReadWriteSplit(true);
         $adapter->setSkipValidation(true);
 
-        $readResult = $adapter->routeQuery('rw123', QueryParser::READ);
+        $readResult = $adapter->routeQuery('rw123', QueryType::Read);
         $this->assertSame('10.0.1.20:5432', $readResult->endpoint);
         $this->assertSame('read', $readResult->metadata['route']);
 
-        $writeResult = $adapter->routeQuery('rw123', QueryParser::WRITE);
+        $writeResult = $adapter->routeQuery('rw123', QueryType::Write);
         $this->assertSame('10.0.1.10:5432', $writeResult->endpoint);
         $this->assertSame('write', $writeResult->metadata['route']);
 
@@ -197,7 +198,7 @@ class EdgeIntegrationTest extends TestCase
         // read/write split is disabled by default
         $adapter->setSkipValidation(true);
 
-        $readResult = $adapter->routeQuery('rw456', QueryParser::READ);
+        $readResult = $adapter->routeQuery('rw456', QueryType::Read);
         $this->assertSame('10.0.1.99:5432', $readResult->endpoint);
     }
 
@@ -235,7 +236,7 @@ class EdgeIntegrationTest extends TestCase
         // Before transaction: SELECT goes to read replica
         $selectData = $this->buildPgQuery('SELECT * FROM users');
         $classification = $adapter->classifyQuery($selectData, $clientFd);
-        $this->assertSame(QueryParser::READ, $classification);
+        $this->assertSame(QueryType::Read, $classification);
 
         $result = $adapter->routeQuery('txdb', $classification);
         $this->assertSame('10.0.1.20:5432', $result->endpoint);
@@ -243,12 +244,12 @@ class EdgeIntegrationTest extends TestCase
         // BEGIN pins to primary
         $beginData = $this->buildPgQuery('BEGIN');
         $classification = $adapter->classifyQuery($beginData, $clientFd);
-        $this->assertSame(QueryParser::WRITE, $classification);
+        $this->assertSame(QueryType::Write, $classification);
         $this->assertTrue($adapter->isConnectionPinned($clientFd));
 
         // During transaction: SELECT goes to primary (pinned)
         $classification = $adapter->classifyQuery($selectData, $clientFd);
-        $this->assertSame(QueryParser::WRITE, $classification);
+        $this->assertSame(QueryType::Write, $classification);
 
         $result = $adapter->routeQuery('txdb', $classification);
         $this->assertSame('10.0.1.10:5432', $result->endpoint);
@@ -260,7 +261,7 @@ class EdgeIntegrationTest extends TestCase
 
         // After transaction: SELECT goes back to read replica
         $classification = $adapter->classifyQuery($selectData, $clientFd);
-        $this->assertSame(QueryParser::READ, $classification);
+        $this->assertSame(QueryType::Read, $classification);
 
         $result = $adapter->routeQuery('txdb', $classification);
         $this->assertSame('10.0.1.20:5432', $result->endpoint);
@@ -439,7 +440,7 @@ class EdgeIntegrationTest extends TestCase
         $this->assertFalse($first->metadata['cached']);
 
         // Invalidate the resolver cache
-        $resolver->invalidateCache('invaldb');
+        $resolver->purge('invaldb');
 
         // Wait for the routing table cache to expire (1 second TTL)
         sleep(2);
@@ -513,14 +514,14 @@ class EdgeIntegrationTest extends TestCase
         // Verify each database resolved to its correct endpoint
         for ($i = 1; $i <= $databaseCount; $i++) {
             $this->assertSame("10.0.10.{$i}:5432", $results[$i]->endpoint);
-            $this->assertSame('postgresql', $results[$i]->protocol);
+            $this->assertSame(Protocol::PostgreSQL, $results[$i]->protocol);
         }
 
         // All should have been cache misses (first resolution)
         $stats = $adapter->getStats();
-        $this->assertSame($databaseCount, $stats['cache_misses']);
-        $this->assertSame(0, $stats['cache_hits']);
-        $this->assertSame($databaseCount, $stats['routing_table_size']);
+        $this->assertSame($databaseCount, $stats['cacheMisses']);
+        $this->assertSame(0, $stats['cacheHits']);
+        $this->assertSame($databaseCount, $stats['routingTableSize']);
     }
 
     /**
@@ -560,7 +561,7 @@ class EdgeIntegrationTest extends TestCase
         }
 
         $stats = $adapter->getStats();
-        $this->assertSame(1, $stats['routing_errors']);
+        $this->assertSame(1, $stats['routingErrors']);
         $this->assertSame(2, $stats['connections']);
     }
 
@@ -594,7 +595,7 @@ class EdgeIntegrationTest extends TestCase
 
         // Track activity
         $adapter->setActivityInterval(0);
-        $adapter->trackActivity('lifecycle1', ['query' => 'SELECT 1']);
+        $adapter->track('lifecycle1', ['query' => 'SELECT 1']);
         $this->assertCount(1, $resolver->getActivities());
 
         // Notify disconnect
@@ -638,10 +639,10 @@ class EdgeIntegrationTest extends TestCase
         $this->assertSame('TCP', $stats['adapter']);
         $this->assertSame('postgresql', $stats['protocol']);
         $this->assertSame(3, $stats['connections']);
-        $this->assertSame(2, $stats['cache_hits']);
-        $this->assertSame(1, $stats['cache_misses']);
-        $this->assertGreaterThan(0.0, $stats['cache_hit_rate']);
-        $this->assertSame(0, $stats['routing_errors']);
+        $this->assertSame(2, $stats['cacheHits']);
+        $this->assertSame(1, $stats['cacheMisses']);
+        $this->assertGreaterThan(0.0, $stats['cacheHitRate']);
+        $this->assertSame(0, $stats['routingErrors']);
 
         $resolverStats = $stats['resolver'];
         $this->assertSame(1, $resolverStats['connects']);
@@ -751,12 +752,12 @@ class EdgeMockResolver implements Resolver
         $this->disconnects[] = ['resourceId' => $resourceId, 'metadata' => $metadata];
     }
 
-    public function trackActivity(string $resourceId, array $metadata = []): void
+    public function track(string $resourceId, array $metadata = []): void
     {
         $this->activities[] = ['resourceId' => $resourceId, 'metadata' => $metadata];
     }
 
-    public function invalidateCache(string $resourceId): void
+    public function purge(string $resourceId): void
     {
         $this->invalidations[] = $resourceId;
     }
@@ -934,16 +935,16 @@ class EdgeFailoverResolver implements Resolver
         $this->disconnects[] = ['resourceId' => $resourceId, 'metadata' => $metadata];
     }
 
-    public function trackActivity(string $resourceId, array $metadata = []): void
+    public function track(string $resourceId, array $metadata = []): void
     {
         $this->activities[] = ['resourceId' => $resourceId, 'metadata' => $metadata];
     }
 
-    public function invalidateCache(string $resourceId): void
+    public function purge(string $resourceId): void
     {
         $this->invalidations[] = $resourceId;
-        $this->primary->invalidateCache($resourceId);
-        $this->secondary->invalidateCache($resourceId);
+        $this->primary->purge($resourceId);
+        $this->secondary->purge($resourceId);
     }
 
     /**
