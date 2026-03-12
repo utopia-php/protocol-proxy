@@ -23,9 +23,9 @@ High-performance, protocol-agnostic proxy built on Swoole for blazing fast conne
 | CPU utilization at peak | ~60% |
 
 Memory is the primary constraint. Scale estimate:
-- 16GB pod → ~400k connections
-- 32GB pod → ~670k connections
-- 5 × 32GB pods → 3.3M connections
+- 16GB pod -> ~400k connections
+- 32GB pod -> ~670k connections
+- 5 x 32GB pods -> 3.3M connections
 
 ## Features
 
@@ -35,14 +35,24 @@ Memory is the primary constraint. Scale estimate:
 - Health checking and circuit breakers
 - Built-in telemetry and metrics
 - SSRF validation for security
-- Support for HTTP, TCP (PostgreSQL/MySQL), and SMTP
+- Support for HTTP, TCP (PostgreSQL, MySQL, MongoDB), and SMTP
+- Read/write split routing for database protocols
+- TLS termination with mTLS support
+- Coroutine-based server variants for each protocol
+
+## Requirements
+
+- PHP >= 8.4
+- ext-swoole >= 6.0
+- ext-redis
+- [utopia-php/query](https://github.com/utopia-php/query) (for database query classification)
 
 ## Installation
 
 ### Using Composer
 
 ```bash
-composer require appwrite/protocol-proxy
+composer require utopia-php/protocol-proxy
 ```
 
 ### Using Docker
@@ -50,10 +60,10 @@ composer require appwrite/protocol-proxy
 For a complete setup with all dependencies:
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
-See [DOCKER.md](DOCKER.md) for detailed Docker setup and configuration.
+This starts five services: MariaDB, Redis, HTTP proxy (port 8080), TCP proxy (ports 5432/3306), and SMTP proxy (port 8025).
 
 ## Quick Start
 
@@ -73,7 +83,6 @@ class MyResolver implements Resolver
 {
     public function resolve(string $resourceId): Result
     {
-        // Map resource ID to backend endpoint
         $backends = [
             'api.example.com' => 'localhost:3000',
             'app.example.com' => 'localhost:3001',
@@ -89,30 +98,11 @@ class MyResolver implements Resolver
         return new Result(endpoint: $backends[$resourceId]);
     }
 
-    public function onConnect(string $resourceId, array $metadata = []): void
-    {
-        // Called when a connection is established
-    }
-
-    public function onDisconnect(string $resourceId, array $metadata = []): void
-    {
-        // Called when a connection is closed
-    }
-
-    public function track(string $resourceId, array $metadata = []): void
-    {
-        // Track activity for cold-start detection
-    }
-
-    public function purge(string $resourceId): void
-    {
-        // Invalidate cached resolution data
-    }
-
-    public function getStats(): array
-    {
-        return ['resolver' => 'custom'];
-    }
+    public function onConnect(string $resourceId, array $metadata = []): void {}
+    public function onDisconnect(string $resourceId, array $metadata = []): void {}
+    public function track(string $resourceId, array $metadata = []): void {}
+    public function purge(string $resourceId): void {}
+    public function getStats(): array { return []; }
 }
 ```
 
@@ -122,22 +112,9 @@ class MyResolver implements Resolver
 <?php
 require 'vendor/autoload.php';
 
-use Utopia\Proxy\Resolver;
-use Utopia\Proxy\Resolver\Result;
 use Utopia\Proxy\Server\HTTP\Swoole as HTTPServer;
 
-// Create resolver (inline example)
-$resolver = new class implements Resolver {
-    public function resolve(string $resourceId): Result
-    {
-        return new Result(endpoint: 'backend:8080');
-    }
-    public function onConnect(string $resourceId, array $metadata = []): void {}
-    public function onDisconnect(string $resourceId, array $metadata = []): void {}
-    public function track(string $resourceId, array $metadata = []): void {}
-    public function purge(string $resourceId): void {}
-    public function getStats(): array { return []; }
-};
+$resolver = new MyResolver();
 
 $server = new HTTPServer(
     $resolver,
@@ -151,36 +128,28 @@ $server->start();
 
 ### TCP Proxy (Database)
 
+The TCP proxy uses a `Config` object for configuration and listens on multiple ports simultaneously (PostgreSQL on 5432, MySQL on 3306, MongoDB on 27017):
+
 ```php
 <?php
 require 'vendor/autoload.php';
 
-use Utopia\Proxy\Resolver;
-use Utopia\Proxy\Resolver\Result;
+use Utopia\Proxy\Server\TCP\Config;
 use Utopia\Proxy\Server\TCP\Swoole as TCPServer;
 
-$resolver = new class implements Resolver {
-    public function resolve(string $resourceId): Result
-    {
-        // resourceId is the database name from connection
-        return new Result(endpoint: 'postgres:5432');
-    }
-    public function onConnect(string $resourceId, array $metadata = []): void {}
-    public function onDisconnect(string $resourceId, array $metadata = []): void {}
-    public function track(string $resourceId, array $metadata = []): void {}
-    public function purge(string $resourceId): void {}
-    public function getStats(): array { return []; }
-};
+$resolver = new MyResolver();
 
-$server = new TCPServer(
-    $resolver,
+$config = new Config(
     host: '0.0.0.0',
-    ports: [5432, 3306], // PostgreSQL, MySQL
-    workers: swoole_cpu_num() * 2
+    ports: [5432, 3306, 27017],
+    workers: swoole_cpu_num() * 2,
 );
 
+$server = new TCPServer($resolver, $config);
 $server->start();
 ```
+
+The database protocol is determined by port: 5432 = PostgreSQL, 3306 = MySQL, 27017 = MongoDB. The database ID is parsed from the protocol-specific startup message (PostgreSQL startup message, MySQL COM_INIT_DB, MongoDB OP_MSG `$db` field).
 
 ### SMTP Proxy
 
@@ -188,22 +157,9 @@ $server->start();
 <?php
 require 'vendor/autoload.php';
 
-use Utopia\Proxy\Resolver;
-use Utopia\Proxy\Resolver\Result;
 use Utopia\Proxy\Server\SMTP\Swoole as SMTPServer;
 
-$resolver = new class implements Resolver {
-    public function resolve(string $resourceId): Result
-    {
-        // resourceId is the domain from EHLO/HELO
-        return new Result(endpoint: 'mailserver:25');
-    }
-    public function onConnect(string $resourceId, array $metadata = []): void {}
-    public function onDisconnect(string $resourceId, array $metadata = []): void {}
-    public function track(string $resourceId, array $metadata = []): void {}
-    public function purge(string $resourceId): void {}
-    public function getStats(): array { return []; }
-};
+$resolver = new MyResolver();
 
 $server = new SMTPServer(
     $resolver,
@@ -215,34 +171,196 @@ $server = new SMTPServer(
 $server->start();
 ```
 
-## Configuration
+## Read/Write Split Routing
+
+The TCP proxy supports automatic read/write split routing for database connections. Read queries are sent to replicas while writes go to the primary.
+
+### ReadWriteResolver
+
+Implement `ReadWriteResolver` to provide separate read and write endpoints:
 
 ```php
 <?php
-$config = [
-    // Performance tuning
+use Utopia\Proxy\Resolver\ReadWriteResolver;
+use Utopia\Proxy\Resolver\Result;
+
+class MyDatabaseResolver implements ReadWriteResolver
+{
+    public function resolve(string $resourceId): Result
+    {
+        return new Result(endpoint: 'primary-db:5432');
+    }
+
+    public function resolveRead(string $resourceId): Result
+    {
+        return new Result(endpoint: 'replica-db:5432');
+    }
+
+    public function resolveWrite(string $resourceId): Result
+    {
+        return new Result(endpoint: 'primary-db:5432');
+    }
+
+    public function onConnect(string $resourceId, array $metadata = []): void {}
+    public function onDisconnect(string $resourceId, array $metadata = []): void {}
+    public function track(string $resourceId, array $metadata = []): void {}
+    public function purge(string $resourceId): void {}
+    public function getStats(): array { return []; }
+}
+```
+
+### Enabling Read/Write Split
+
+```php
+<?php
+use Utopia\Proxy\Server\TCP\Config;
+use Utopia\Proxy\Server\TCP\Swoole as TCPServer;
+
+$config = new Config(
+    ports: [5432, 3306],
+    readWriteSplit: true,
+);
+
+$server = new TCPServer(new MyDatabaseResolver(), $config);
+$server->start();
+```
+
+Query classification is handled by `utopia-php/query` parsers (PostgreSQL, MySQL, MongoDB). Transactions are automatically pinned to the primary — `BEGIN` pins, `COMMIT`/`ROLLBACK` unpins.
+
+## TLS Termination
+
+The TCP proxy supports TLS termination for database connections, including mutual TLS (mTLS).
+
+```php
+<?php
+use Utopia\Proxy\Server\TCP\Config;
+use Utopia\Proxy\Server\TCP\TLS;
+use Utopia\Proxy\Server\TCP\Swoole as TCPServer;
+
+$tls = new TLS(
+    certPath: '/certs/server.crt',
+    keyPath: '/certs/server.key',
+    caPath: '/certs/ca.crt',           // Optional: for mTLS
+    requireClientCert: true,            // Optional: require client certs
+);
+
+$config = new Config(
+    ports: [5432, 3306],
+    tls: $tls,
+);
+
+$server = new TCPServer($resolver, $config);
+$server->start();
+```
+
+Supported protocols:
+- **PostgreSQL**: STARTTLS via SSLRequest/SSLResponse handshake
+- **MySQL**: SSL capability flag in server greeting
+
+TLS can also be configured via environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PROXY_TLS_ENABLED` | `false` | Enable TLS termination |
+| `PROXY_TLS_CERT` | | Path to server certificate |
+| `PROXY_TLS_KEY` | | Path to private key |
+| `PROXY_TLS_CA` | | Path to CA certificate (for mTLS) |
+| `PROXY_TLS_REQUIRE_CLIENT_CERT` | `false` | Require client certificates |
+
+## Configuration
+
+### HTTP Server
+
+```php
+<?php
+$server = new HTTPServer($resolver, '0.0.0.0', 80, 16, [
+    // Performance
     'max_connections' => 100_000,
     'max_coroutine' => 100_000,
-    'socket_buffer_size' => 8 * 1024 * 1024, // 8MB
-    'buffer_output_size' => 8 * 1024 * 1024, // 8MB
-    'log_level' => SWOOLE_LOG_ERROR,
+    'socket_buffer_size' => 2 * 1024 * 1024,
+    'buffer_output_size' => 2 * 1024 * 1024,
+    'backend_pool_size' => 1024,
+    'backend_timeout' => 30,
+    'backend_keep_alive' => true,
 
-    // HTTP-specific
-    'backend_pool_size' => 2048,
-    'telemetry_headers' => true,
-    'fast_path' => true,
+    // Behavior
+    'fast_path' => false,           // Minimal header processing
+    'fast_path_assume_ok' => false, // Skip status code forwarding
+    'fixed_backend' => null,        // Route all requests to static endpoint
+    'direct_response' => null,      // Return static response without forwarding
+    'raw_backend' => false,         // Use raw TCP for GET/HEAD (benchmark only)
+    'telemetry_headers' => true,    // Add X-Proxy-* response headers
+    'skip_validation' => false,     // Disable SSRF protection
+
+    // Protocol
     'open_http2_protocol' => false,
-
-    // Cold-start settings
-    'cold_start_timeout' => 30_000, // 30 seconds
-    'health_check_interval' => 100, // 100ms
-
-    // Security
-    'skip_validation' => false, // Enable SSRF protection
-];
-
-$server = new HTTPServer($resolver, '0.0.0.0', 80, 16, $config);
+    'http_keepalive_timeout' => 60,
+]);
 ```
+
+### TCP Server
+
+```php
+<?php
+$config = new Config(
+    host: '0.0.0.0',
+    ports: [5432, 3306, 27017],
+    workers: 16,
+    maxConnections: 200_000,
+    socketBufferSize: 16 * 1024 * 1024,
+    bufferOutputSize: 16 * 1024 * 1024,
+    recvBufferSize: 131_072,
+    backendConnectTimeout: 5.0,
+    readWriteSplit: false,
+    skipValidation: false,
+    tls: null,
+
+    // TCP keep-alive
+    tcpKeepidle: 30,
+    tcpKeepinterval: 10,
+    tcpKeepcount: 3,
+);
+```
+
+### Environment Variables
+
+The proxy entry points (`proxies/*.php`) support configuration via environment variables:
+
+**HTTP Proxy:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HTTP_WORKERS` | `cpu_num * 2` | Worker process count |
+| `HTTP_SERVER_MODE` | `process` | `process` or `base` |
+| `HTTP_SERVER_IMPL` | `swoole` | `swoole` or `coroutine` |
+| `HTTP_FAST_PATH` | `true` | Minimal header processing |
+| `HTTP_FAST_ASSUME_OK` | `false` | Skip status code forwarding |
+| `HTTP_FIXED_BACKEND` | | Route all to static endpoint |
+| `HTTP_DIRECT_RESPONSE` | | Return static response |
+| `HTTP_RAW_BACKEND` | `false` | Raw TCP for GET/HEAD |
+| `HTTP_BACKEND_POOL_SIZE` | `2048` | Connection pool size |
+| `HTTP_KEEPALIVE_TIMEOUT` | `60` | Keep-alive timeout (seconds) |
+| `HTTP_OPEN_HTTP2` | `false` | Enable HTTP/2 |
+| `HTTP_SKIP_VALIDATION` | `false` | Disable SSRF protection |
+| `HTTP_BACKEND_ENDPOINT` | `http-backend:5678` | Default backend endpoint |
+
+**TCP Proxy:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TCP_WORKERS` | `cpu_num * 2` | Worker process count |
+| `TCP_SERVER_IMPL` | `swoole` | `swoole` or `coroutine` |
+| `TCP_POSTGRES_PORT` | `5432` | PostgreSQL listen port |
+| `TCP_MYSQL_PORT` | `3306` | MySQL listen port |
+| `TCP_SKIP_VALIDATION` | `false` | Disable SSRF protection |
+| `TCP_BACKEND_ENDPOINT` | `tcp-backend:15432` | Default backend endpoint |
+
+**SMTP Proxy:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SMTP_BACKEND_ENDPOINT` | `smtp-backend:1025` | Default backend endpoint |
+| `SMTP_SKIP_VALIDATION` | `false` | Disable SSRF protection |
 
 ## Testing
 
@@ -256,50 +374,71 @@ Integration tests (Docker Compose):
 composer test:integration
 ```
 
-Coverage (requires Xdebug or PCOV):
+All tests:
 
 ```bash
-vendor/bin/phpunit --coverage-text
+composer test:all
+```
+
+Static analysis:
+
+```bash
+composer check
 ```
 
 ## Architecture
 
-The protocol-proxy uses the **Resolver Pattern** for platform-agnostic backend resolution, combined with protocol-specific adapters for optimized handling.
-
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        Protocol Proxy                            │
+│                        Protocol Proxy                           │
 ├─────────────────────────────────────────────────────────────────┤
-│                                                                   │
+│                                                                 │
 │  ┌──────────┐      ┌──────────┐      ┌──────────┐              │
 │  │   HTTP   │      │   TCP    │      │   SMTP   │              │
 │  │  Server  │      │  Server  │      │  Server  │              │
 │  └────┬─────┘      └────┬─────┘      └────┬─────┘              │
 │       │                 │                  │                     │
+│       │            ┌────┴─────┐            │                     │
+│       │            │ TCP      │            │                     │
+│       │            │ Adapter  │            │                     │
+│       │            └────┬─────┘            │                     │
+│       │                 │                  │                     │
 │       └─────────────────┴──────────────────┘                     │
 │                         │                                        │
-│           ┌─────────────┼─────────────┐                          │
-│           │             │             │                          │
-│      ┌────▼────┐   ┌────▼────┐  ┌────▼────┐                    │
-│      │   HTTP  │   │   TCP   │  │   SMTP  │                    │
-│      │ Adapter │   │ Adapter │  │ Adapter │                    │
-│      └────┬────┘   └────┬────┘  └────┬────┘                    │
-│           │             │             │                          │
-│           └─────────────┴─────────────┘                          │
-│                         │                                        │
 │                ┌────────▼────────┐                               │
-│                │    Resolver     │                               │
-│                │   (Interface)   │                               │
+│                │    Adapter      │                               │
+│                │   (Base Class)  │                               │
 │                └────────┬────────┘                               │
 │                         │                                        │
 │         ┌───────────────┼───────────────┐                        │
 │         │               │               │                        │
-│    ┌────▼────┐     ┌────▼────┐    ┌────▼────┐                  │
-│    │ Routing │     │Lifecycle│    │  Stats  │                  │
-│    │  Cache  │     │ Hooks   │    │ & Logs  │                  │
-│    └─────────┘     └─────────┘    └─────────┘                  │
-│                                                                   │
-└─────────────────────────────────────────────────────────────────┘
+│    ┌────▼────┐     ┌────▼────┐    ┌────▼────┐                   │
+│    │Resolver │     │ReadWrite│    │  Query  │                   │
+│    │(resolve)│     │Resolver │    │ Parser  │                   │
+│    └────┬────┘     └────┬────┘    └────┬────┘                   │
+│         │               │              │                         │
+│    ┌────▼────┐     ┌────▼────┐    ┌────▼────┐                   │
+│    │ Routing │     │  R/W    │    │ PG/MY/  │                   │
+│    │  Cache  │     │  Split  │    │  Mongo  │                   │
+│    └─────────┘     └─────────┘    └─────────┘                   │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Protocol Enum
+
+The `Protocol` enum defines all supported protocol types:
+
+```php
+enum Protocol: string
+{
+    case HTTP = 'http';
+    case SMTP = 'smtp';
+    case TCP = 'tcp';
+    case PostgreSQL = 'postgresql';
+    case MySQL = 'mysql';
+    case MongoDB = 'mongodb';
+}
 ```
 
 ### Resolver Interface
@@ -309,27 +448,28 @@ The `Resolver` interface is the core abstraction point:
 ```php
 interface Resolver
 {
-    // Map resource ID to backend endpoint
     public function resolve(string $resourceId): Result;
-
-    // Lifecycle hooks
     public function onConnect(string $resourceId, array $metadata = []): void;
     public function onDisconnect(string $resourceId, array $metadata = []): void;
-
-    // Activity tracking for cold-start detection
     public function track(string $resourceId, array $metadata = []): void;
-
-    // Cache management
     public function purge(string $resourceId): void;
-
-    // Statistics
     public function getStats(): array;
 }
 ```
 
-### Resolution Result
+### ReadWriteResolver Interface
 
-The `Result` class contains the resolved backend endpoint:
+Extends `Resolver` for read/write split routing:
+
+```php
+interface ReadWriteResolver extends Resolver
+{
+    public function resolveRead(string $resourceId): Result;
+    public function resolveWrite(string $resourceId): Result;
+}
+```
+
+### Resolution Result
 
 ```php
 new Result(
@@ -351,10 +491,12 @@ throw new Exception('Forbidden', Exception::FORBIDDEN);     // 403
 throw new Exception('Error', Exception::INTERNAL);          // 500
 ```
 
-### Protocol-Specific Adapters
+### Protocol-Specific Routing
 
 - **HTTP** - Routes requests based on `Host` header
-- **TCP** - Routes connections based on database name from PostgreSQL/MySQL protocol
+- **TCP/PostgreSQL** - Parses database name from startup message
+- **TCP/MySQL** - Extracts database name from COM_INIT_DB packet
+- **TCP/MongoDB** - Extracts database name from OP_MSG `$db` field
 - **SMTP** - Routes connections based on domain from EHLO/HELO command
 
 ## License
