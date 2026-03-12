@@ -31,10 +31,6 @@ class EdgeIntegrationTest extends TestCase
         }
     }
 
-    // ---------------------------------------------------------------
-    // 1. Full Resolution Flow
-    // ---------------------------------------------------------------
-
     /**
      * @group integration
      */
@@ -129,10 +125,6 @@ class EdgeIntegrationTest extends TestCase
         $this->assertSame('10.0.2.30:3306', $result->endpoint);
         $this->assertSame(Protocol::MySQL, $result->protocol);
     }
-
-    // ---------------------------------------------------------------
-    // 2. Read/Write Split Resolution
-    // ---------------------------------------------------------------
 
     /**
      * @group integration
@@ -267,10 +259,6 @@ class EdgeIntegrationTest extends TestCase
         $this->assertSame('10.0.1.20:5432', $result->endpoint);
     }
 
-    // ---------------------------------------------------------------
-    // 3. Failover Behavior
-    // ---------------------------------------------------------------
-
     /**
      * @group integration
      */
@@ -377,10 +365,6 @@ class EdgeIntegrationTest extends TestCase
         $this->assertTrue($failoverResolver->didFailover());
     }
 
-    // ---------------------------------------------------------------
-    // 4. Connection Caching/Pooling
-    // ---------------------------------------------------------------
-
     /**
      * @group integration
      */
@@ -482,10 +466,6 @@ class EdgeIntegrationTest extends TestCase
         $this->assertNotSame($result1->endpoint, $result2->endpoint);
     }
 
-    // ---------------------------------------------------------------
-    // 5. Concurrent Resolution for Multiple Database IDs
-    // ---------------------------------------------------------------
-
     /**
      * @group integration
      */
@@ -564,10 +544,6 @@ class EdgeIntegrationTest extends TestCase
         $this->assertSame(1, $stats['routingErrors']);
         $this->assertSame(2, $stats['connections']);
     }
-
-    // ---------------------------------------------------------------
-    // 6. Lifecycle Tracking (connect/disconnect/activity)
-    // ---------------------------------------------------------------
 
     /**
      * @group integration
@@ -650,10 +626,6 @@ class EdgeIntegrationTest extends TestCase
         $this->assertSame(1, $resolverStats['disconnects']);
     }
 
-    // ---------------------------------------------------------------
-    // Helper: Build a PostgreSQL Simple Query message
-    // ---------------------------------------------------------------
-
     private function buildPgQuery(string $sql): string
     {
         $body = $sql . "\x00";
@@ -662,10 +634,6 @@ class EdgeIntegrationTest extends TestCase
         return 'Q' . \pack('N', $length) . $body;
     }
 }
-
-// ---------------------------------------------------------------------------
-// Mock Resolvers that simulate Edge HTTP interactions
-// ---------------------------------------------------------------------------
 
 /**
  * Simulates an Edge service resolver that resolves database IDs to backend

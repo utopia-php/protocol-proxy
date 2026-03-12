@@ -105,10 +105,6 @@ final class PerformanceTest extends TestCase
         $this->readWriteSplitPort = (int) (getenv('PERF_READ_WRITE_SPLIT_PORT') ?: 0);
     }
 
-    // -------------------------------------------------------------------------
-    // Test: Connection Rate
-    // -------------------------------------------------------------------------
-
     /**
      * Measure how many TCP connections per second can be established
      * and complete the PostgreSQL startup handshake through the proxy.
@@ -160,10 +156,6 @@ final class PerformanceTest extends TestCase
             sprintf('Connection rate %.0f/sec is below target %d/sec', $rate, $this->targetConnRate),
         );
     }
-
-    // -------------------------------------------------------------------------
-    // Test: Query Throughput
-    // -------------------------------------------------------------------------
 
     /**
      * Measure queries per second through the proxy by sending PostgreSQL
@@ -217,10 +209,6 @@ final class PerformanceTest extends TestCase
 
         $this->assertGreaterThan(0, $successful, 'Should complete at least one query');
     }
-
-    // -------------------------------------------------------------------------
-    // Test: Cold Start Latency
-    // -------------------------------------------------------------------------
 
     /**
      * Measure time from first connection to first query response. This includes
@@ -281,10 +269,6 @@ final class PerformanceTest extends TestCase
         $this->recordResult('cold_start_p95', $p95, 'ms', null);
         $this->recordResult('cold_start_p99', $p99, 'ms', null);
     }
-
-    // -------------------------------------------------------------------------
-    // Test: Failover Latency
-    // -------------------------------------------------------------------------
 
     /**
      * Measure the time to detect backend failure and establish a new connection.
@@ -351,10 +335,6 @@ final class PerformanceTest extends TestCase
         $this->recordResult('failover_p50', $p50, 'ms', null);
         $this->recordResult('failover_p95', $p95, 'ms', null);
     }
-
-    // -------------------------------------------------------------------------
-    // Test: Large Payload Throughput
-    // -------------------------------------------------------------------------
 
     /**
      * Send increasingly large payloads (1KB, 10KB, 100KB, 1MB, 10MB) through
@@ -427,10 +407,6 @@ final class PerformanceTest extends TestCase
             $this->assertGreaterThan(0, $successful, "Should complete at least one {$label} transfer");
         }
     }
-
-    // -------------------------------------------------------------------------
-    // Test: Connection Pool Exhaustion
-    // -------------------------------------------------------------------------
 
     /**
      * Open connections until the max_connections limit is reached.
@@ -521,10 +497,6 @@ final class PerformanceTest extends TestCase
             );
         }
     }
-
-    // -------------------------------------------------------------------------
-    // Test: Concurrent Connection Scaling
-    // -------------------------------------------------------------------------
 
     /**
      * Measure query latency with 10, 100, 1000, and 10000 concurrent connections
@@ -641,10 +613,6 @@ final class PerformanceTest extends TestCase
         $this->assertArrayHasKey('latency_at_10_avg', self::$results);
     }
 
-    // -------------------------------------------------------------------------
-    // Test: Read/Write Split Overhead
-    // -------------------------------------------------------------------------
-
     /**
      * Compare query latency with and without read/write split enabled.
      * Measures the overhead introduced by query classification.
@@ -698,10 +666,6 @@ final class PerformanceTest extends TestCase
             sprintf('Read/write split overhead is %.1f%% which exceeds 20%%', $overheadPct),
         );
     }
-
-    // =========================================================================
-    // PostgreSQL wire protocol helpers
-    // =========================================================================
 
     /**
      * Build a PostgreSQL StartupMessage with the database name encoding the
@@ -859,10 +823,6 @@ final class PerformanceTest extends TestCase
 
         return $latencies;
     }
-
-    // =========================================================================
-    // Result recording and logging
-    // =========================================================================
 
     /**
      * Record a benchmark result for the summary table.

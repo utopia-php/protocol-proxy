@@ -19,10 +19,6 @@ class QueryParserTest extends TestCase
         $this->mysqlParser = new MySQL();
     }
 
-    // ---------------------------------------------------------------
-    // PostgreSQL Simple Query Protocol
-    // ---------------------------------------------------------------
-
     /**
      * Build a PostgreSQL Simple Query ('Q') message
      *
@@ -189,10 +185,6 @@ class QueryParserTest extends TestCase
         $this->assertSame(QueryType::Write, $this->pgParser->parse($data));
     }
 
-    // ---------------------------------------------------------------
-    // PostgreSQL Transaction Commands
-    // ---------------------------------------------------------------
-
     public function testPgBeginTransaction(): void
     {
         $data = $this->buildPgQuery('BEGIN');
@@ -235,10 +227,6 @@ class QueryParserTest extends TestCase
         $this->assertSame(QueryType::Transaction, $this->pgParser->parse($data));
     }
 
-    // ---------------------------------------------------------------
-    // PostgreSQL Extended Query Protocol
-    // ---------------------------------------------------------------
-
     public function testPgParseMessageRoutesToWrite(): void
     {
         $data = $this->buildPgParse('stmt1', 'SELECT * FROM users');
@@ -257,10 +245,6 @@ class QueryParserTest extends TestCase
         $this->assertSame(QueryType::Write, $this->pgParser->parse($data));
     }
 
-    // ---------------------------------------------------------------
-    // PostgreSQL Edge Cases
-    // ---------------------------------------------------------------
-
     public function testPgTooShortPacket(): void
     {
         $this->assertSame(QueryType::Unknown, $this->pgParser->parse('Q'));
@@ -271,10 +255,6 @@ class QueryParserTest extends TestCase
         $data = 'X' . \pack('N', 5) . "\x00";
         $this->assertSame(QueryType::Unknown, $this->pgParser->parse($data));
     }
-
-    // ---------------------------------------------------------------
-    // MySQL COM_QUERY Protocol
-    // ---------------------------------------------------------------
 
     /**
      * Build a MySQL COM_QUERY packet
@@ -393,10 +373,6 @@ class QueryParserTest extends TestCase
         $this->assertSame(QueryType::Write, $this->mysqlParser->parse($data));
     }
 
-    // ---------------------------------------------------------------
-    // MySQL Transaction Commands
-    // ---------------------------------------------------------------
-
     public function testMysqlBeginTransaction(): void
     {
         $data = $this->buildMySQLQuery('BEGIN');
@@ -427,10 +403,6 @@ class QueryParserTest extends TestCase
         $this->assertSame(QueryType::Transaction, $this->mysqlParser->parse($data));
     }
 
-    // ---------------------------------------------------------------
-    // MySQL Prepared Statement Protocol
-    // ---------------------------------------------------------------
-
     public function testMysqlStmtPrepareRoutesToWrite(): void
     {
         $data = $this->buildMySQLStmtPrepare('SELECT * FROM users WHERE id = ?');
@@ -442,10 +414,6 @@ class QueryParserTest extends TestCase
         $data = $this->buildMySQLStmtExecute(1);
         $this->assertSame(QueryType::Write, $this->mysqlParser->parse($data));
     }
-
-    // ---------------------------------------------------------------
-    // MySQL Edge Cases
-    // ---------------------------------------------------------------
 
     public function testMysqlTooShortPacket(): void
     {
@@ -460,10 +428,6 @@ class QueryParserTest extends TestCase
         $data = $header . "\x01";
         $this->assertSame(QueryType::Unknown, $this->mysqlParser->parse($data));
     }
-
-    // ---------------------------------------------------------------
-    // SQL Classification (classifySQL) — Edge Cases
-    // ---------------------------------------------------------------
 
     public function testClassifyLeadingWhitespace(): void
     {
@@ -518,10 +482,6 @@ class QueryParserTest extends TestCase
         $this->assertSame(QueryType::Read, $this->pgParser->classifySQL('SELECT;'));
     }
 
-    // ---------------------------------------------------------------
-    // COPY Direction Classification
-    // ---------------------------------------------------------------
-
     public function testClassifyCopyTo(): void
     {
         $this->assertSame(QueryType::Read, $this->pgParser->classifySQL('COPY users TO STDOUT'));
@@ -537,10 +497,6 @@ class QueryParserTest extends TestCase
         // No direction keyword - defaults to WRITE for safety
         $this->assertSame(QueryType::Write, $this->pgParser->classifySQL('COPY users'));
     }
-
-    // ---------------------------------------------------------------
-    // CTE (WITH) Classification
-    // ---------------------------------------------------------------
 
     public function testClassifyCteWithSelect(): void
     {
@@ -579,10 +535,6 @@ class QueryParserTest extends TestCase
         $this->assertSame(QueryType::Read, $this->pgParser->classifySQL($sql));
     }
 
-    // ---------------------------------------------------------------
-    // Keyword Extraction
-    // ---------------------------------------------------------------
-
     public function testExtractKeywordSimple(): void
     {
         $this->assertSame('SELECT', $this->pgParser->extractKeyword('SELECT * FROM users'));
@@ -612,10 +564,6 @@ class QueryParserTest extends TestCase
     {
         $this->assertSame('SELECT', $this->pgParser->extractKeyword('SELECT(1)'));
     }
-
-    // ---------------------------------------------------------------
-    // Performance
-    // ---------------------------------------------------------------
 
     public function testParsePerformance(): void
     {

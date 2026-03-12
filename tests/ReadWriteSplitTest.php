@@ -22,10 +22,6 @@ class ReadWriteSplitTest extends TestCase
         $this->basicResolver = new MockResolver();
     }
 
-    // ---------------------------------------------------------------
-    // Read/Write Split Configuration
-    // ---------------------------------------------------------------
-
     public function testReadWriteSplitDisabledByDefault(): void
     {
         $adapter = new TCPAdapter($this->rwResolver, port: 5432);
@@ -46,10 +42,6 @@ class ReadWriteSplitTest extends TestCase
         $adapter->setReadWriteSplit(false);
         $this->assertFalse($adapter->isReadWriteSplit());
     }
-
-    // ---------------------------------------------------------------
-    // Query Classification via Adapter
-    // ---------------------------------------------------------------
 
     /**
      * Build a PostgreSQL Simple Query message
@@ -118,10 +110,6 @@ class ReadWriteSplitTest extends TestCase
         $data = $this->buildPgQuery('SELECT * FROM users');
         $this->assertSame(QueryType::Write, $adapter->classifyQuery($data, 1));
     }
-
-    // ---------------------------------------------------------------
-    // Transaction Pinning
-    // ---------------------------------------------------------------
 
     public function testBeginPinsConnectionToPrimary(): void
     {
@@ -242,10 +230,6 @@ class ReadWriteSplitTest extends TestCase
         $this->assertFalse($adapter->isConnectionPinned($clientFd));
     }
 
-    // ---------------------------------------------------------------
-    // Multiple Connections Independence
-    // ---------------------------------------------------------------
-
     public function testPinningIsPerConnection(): void
     {
         $adapter = new TCPAdapter($this->rwResolver, port: 5432);
@@ -265,10 +249,6 @@ class ReadWriteSplitTest extends TestCase
         // fd1 is pinned to write
         $this->assertSame(QueryType::Write, $adapter->classifyQuery($this->buildPgQuery('SELECT 1'), $fd1));
     }
-
-    // ---------------------------------------------------------------
-    // Route Query Integration (with ReadWriteResolver)
-    // ---------------------------------------------------------------
 
     public function testRouteQueryReadUsesReadEndpoint(): void
     {
@@ -327,10 +307,6 @@ class ReadWriteSplitTest extends TestCase
         $this->assertSame('default.db:5432', $result->endpoint);
     }
 
-    // ---------------------------------------------------------------
-    // Transaction State with SET Command
-    // ---------------------------------------------------------------
-
     public function testSetCommandRoutesToPrimaryButDoesNotPin(): void
     {
         $adapter = new TCPAdapter($this->rwResolver, port: 5432);
@@ -345,10 +321,6 @@ class ReadWriteSplitTest extends TestCase
         // But SET should not pin the connection (only BEGIN/START pin)
         $this->assertFalse($adapter->isConnectionPinned($clientFd));
     }
-
-    // ---------------------------------------------------------------
-    // Unknown Queries Route to Primary
-    // ---------------------------------------------------------------
 
     public function testUnknownQueryRoutesToWrite(): void
     {

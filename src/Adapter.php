@@ -97,11 +97,6 @@ class Adapter
     }
 
     /**
-     * Track activity for a resource
-     *
-     * @param  array<string, mixed>  $metadata  Activity metadata
-     */
-    /**
      * Record bytes transferred for a resource
      */
     public function recordBytes(

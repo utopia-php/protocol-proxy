@@ -204,7 +204,7 @@ class Swoole
     }
 
     /**
-     * Main receive handler - FAST AS FUCK
+     * Main receive handler
      *
      * Performance: <1ms overhead for proxying
      *

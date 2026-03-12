@@ -164,7 +164,7 @@ class Swoole
     }
 
     /**
-     * Main request handler - FAST AS FUCK
+     * Main request handler
      *
      * Performance: <1ms for cache hit
      */
