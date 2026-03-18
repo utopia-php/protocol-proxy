@@ -3,13 +3,13 @@
 # One-shot benchmark runner for fresh Linux droplet
 #
 # Usage (as root on fresh Ubuntu 22.04/24.04):
-#   curl -sL https://raw.githubusercontent.com/utopia-php/protocol-proxy/dev/benchmarks/bootstrap-droplet.sh | sudo bash
+#   curl -sL https://raw.githubusercontent.com/utopia-php/proxy/dev/benchmarks/bootstrap-droplet.sh | sudo bash
 #
 # Quick Docker test (no install needed):
 #   docker run --rm --privileged phpswoole/swoole:php8.3-alpine sh -c '
 #     apk add --no-cache git composer > /dev/null 2>&1
-#     cd /tmp && git clone --depth 1 -b dev https://github.com/utopia-php/protocol-proxy.git
-#     cd protocol-proxy && composer install --quiet
+#     cd /tmp && git clone --depth 1 -b dev https://github.com/utopia-php/proxy.git
+#     cd proxy && composer install --quiet
 #     BACKEND_HOST=127.0.0.1 BACKEND_PORT=15432 php benchmarks/tcp-backend.php &
 #     sleep 2 && BENCH_PORT=15432 BENCH_CONCURRENCY=100 BENCH_CONNECTIONS=5000 php benchmarks/tcp.php
 #   '
@@ -111,17 +111,17 @@ else
     echo "  - Composer installed"
 fi
 
-echo "[4/6] Cloning protocol-proxy..."
+echo "[4/6] Cloning proxy..."
 
-WORKDIR="/tmp/protocol-proxy-bench"
+WORKDIR="/tmp/proxy-bench"
 rm -rf "$WORKDIR"
 
-if [ -f "composer.json" ] && grep -q "protocol-proxy" composer.json 2>/dev/null; then
+if [ -f "composer.json" ] && grep -q "proxy" composer.json 2>/dev/null; then
     # Already in the repo
     WORKDIR="$(pwd)"
     echo "  - Using current directory"
 else
-    git clone --depth 1 -b dev https://github.com/utopia-php/protocol-proxy.git "$WORKDIR" 2>/dev/null
+    git clone --depth 1 -b dev https://github.com/utopia-php/proxy.git "$WORKDIR" 2>/dev/null
     cd "$WORKDIR"
     echo "  - Cloned to $WORKDIR"
 fi

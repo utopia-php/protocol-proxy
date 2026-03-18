@@ -74,9 +74,9 @@ echo "  OK: Composer $(composer --version 2>/dev/null | cut -d' ' -f3)"
 
 echo "[5/6] Testing git clone..."
 cd /tmp
-rm -rf protocol-proxy-test
-git clone --depth 1 -b dev https://github.com/utopia-php/protocol-proxy.git protocol-proxy-test > /dev/null 2>&1
-cd protocol-proxy-test
+rm -rf proxy-test
+git clone --depth 1 -b dev https://github.com/utopia-php/proxy.git proxy-test > /dev/null 2>&1
+cd proxy-test
 echo "  OK: Cloned successfully"
 
 echo "[6/6] Testing composer install..."
@@ -91,4 +91,4 @@ BENCH_CONCURRENCY=5 BENCH_CONNECTIONS=10 BENCH_PAYLOAD_BYTES=0 php benchmarks/tc
 
 echo ""
 echo "Bootstrap script should work. Run the full version:"
-echo "  curl -sL https://raw.githubusercontent.com/utopia-php/protocol-proxy/dev/benchmarks/bootstrap-droplet.sh | sudo bash"
+echo "  curl -sL https://raw.githubusercontent.com/utopia-php/proxy/dev/benchmarks/bootstrap-droplet.sh | sudo bash"

@@ -15,7 +15,7 @@ High-load benchmark suite for HTTP and TCP proxies.
 ## One-Shot Benchmark (Fresh Linux Droplet)
 
 ```bash
-curl -sL https://raw.githubusercontent.com/utopia-php/protocol-proxy/dev/benchmarks/bootstrap-droplet.sh | sudo bash
+curl -sL https://raw.githubusercontent.com/utopia-php/proxy/dev/benchmarks/bootstrap-droplet.sh | sudo bash
 ```
 
 This installs PHP 8.3 + Swoole, tunes the kernel, and runs all benchmarks automatically.

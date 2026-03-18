@@ -52,7 +52,7 @@ Memory is the primary constraint. Scale estimate:
 ### Using Composer
 
 ```bash
-composer require utopia-php/protocol-proxy
+composer require utopia-php/proxy
 ```
 
 ### Using Docker
@@ -67,7 +67,7 @@ This starts five services: MariaDB, Redis, HTTP proxy (port 8080), TCP proxy (po
 
 ## Quick Start
 
-The protocol-proxy uses the **Resolver Pattern** - a platform-agnostic interface for resolving resource identifiers to backend endpoints.
+The proxy uses the **Resolver Pattern** - a platform-agnostic interface for resolving resource identifiers to backend endpoints.
 
 ### Implementing a Resolver
 
@@ -324,7 +324,7 @@ $config = new Config(
 
 ### Environment Variables
 
-The proxy entry points (`proxies/*.php`) support configuration via environment variables:
+The proxy entry points (`examples/*.php`) support configuration via environment variables:
 
 **HTTP Proxy:**
 

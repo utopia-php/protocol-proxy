@@ -1,5 +1,5 @@
 {
-    "name": "utopia-php/protocol-proxy",
+    "name": "utopia-php/proxy",
     "description": "High-performance protocol-agnostic proxy with Swoole for HTTP, TCP, and SMTP",
     "type": "library",
     "license": "BSD-3-Clause",
