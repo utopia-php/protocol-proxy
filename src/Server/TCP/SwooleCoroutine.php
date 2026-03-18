@@ -11,7 +11,7 @@ use Utopia\Proxy\Resolver;
 /**
  * High-performance TCP proxy server (Swoole Coroutine Implementation)
  *
- * Supports optional TLS termination for database connections:
+ * Supports optional TLS termination:
  * - PostgreSQL: STARTTLS via SSLRequest/SSLResponse handshake
  * - MySQL: SSL capability flag in server greeting
  *
@@ -174,24 +174,23 @@ class SwooleCoroutine
             }
         }
 
+        $fdKey = (string) $clientId;
+
         try {
-            $databaseId = $adapter->parseDatabaseId($data, $clientId);
-            $backendClient = $adapter->getBackendConnection($databaseId, $clientId);
+            $backendClient = $adapter->getBackendConnection($data, $clientId);
             /** @var \Swoole\Coroutine\Socket $backendSocket */
             $backendSocket = $backendClient->exportSocket();
 
-            // Notify connect
-            $adapter->notifyConnect($databaseId);
+            $adapter->notifyConnect($fdKey);
 
-            // Start backend -> client forwarding in separate coroutine
-            Coroutine::create(function () use ($clientSocket, $backendSocket, $bufferSize, $adapter, $databaseId): void {
+            Coroutine::create(function () use ($clientSocket, $backendSocket, $bufferSize, $adapter, $fdKey): void {
                 while (true) {
                     /** @var string|false $data */
                     $data = $backendSocket->recv($bufferSize);
                     if ($data === false || $data === '') {
                         break;
                     }
-                    $adapter->recordBytes($databaseId, 0, \strlen($data));
+                    $adapter->recordBytes($fdKey, 0, \strlen($data));
                     if ($clientSocket->sendAll($data) === false) {
                         break;
                     }
@@ -199,8 +198,7 @@ class SwooleCoroutine
                 $clientSocket->close();
             });
 
-            // Forward initial packet
-            $adapter->recordBytes($databaseId, \strlen($data), 0);
+            $adapter->recordBytes($fdKey, \strlen($data), 0);
             $backendSocket->sendAll($data);
         } catch (\Exception $e) {
             echo "Error handling data from #{$clientId}: {$e->getMessage()}\n";
@@ -209,21 +207,20 @@ class SwooleCoroutine
             return;
         }
 
-        // Client -> backend forwarding in current coroutine
         while (true) {
             /** @var string|false $data */
             $data = $clientSocket->recv($bufferSize);
             if ($data === false || $data === '') {
                 break;
             }
-            $adapter->recordBytes($databaseId, \strlen($data), 0);
-            $adapter->track($databaseId);
+            $adapter->recordBytes($fdKey, \strlen($data), 0);
+            $adapter->track($fdKey);
             $backendSocket->sendAll($data);
         }
 
-        $adapter->notifyClose($databaseId);
+        $adapter->notifyClose($fdKey);
         $backendSocket->close();
-        $adapter->closeBackendConnection($databaseId, $clientId);
+        $adapter->closeBackendConnection($clientId);
 
         if ($this->config->logConnections) {
             echo "Client #{$clientId} disconnected\n";

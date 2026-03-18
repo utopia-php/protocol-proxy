@@ -3,7 +3,7 @@
 /**
  * Example: Integrating Appwrite Edge with Protocol Proxy
  *
- * This example shows how Appwrite Edge can use the protocol-proxy
+ * This example shows how Appwrite Edge can use the proxy
  * with a custom Resolver to inject business logic like:
  * - Rule caching and resolution
  * - Domain validation

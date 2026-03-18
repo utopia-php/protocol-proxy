@@ -44,7 +44,7 @@ class AdapterMetadataTest extends TestCase
 
         $this->assertSame('TCP', $adapter->getName());
         $this->assertSame(Protocol::PostgreSQL, $adapter->getProtocol());
-        $this->assertSame('TCP proxy adapter for database connections (PostgreSQL, MySQL, MongoDB)', $adapter->getDescription());
+        $this->assertSame('TCP proxy adapter', $adapter->getDescription());
         $this->assertSame(5432, $adapter->port);
     }
 }

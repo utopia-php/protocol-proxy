@@ -6,7 +6,7 @@ namespace Utopia\Proxy\Server\TCP;
  * TLS Configuration for TCP Proxy Server
  *
  * Holds certificate paths, protocol constraints, cipher configuration,
- * and mTLS (mutual TLS) settings for TLS-terminated database connections.
+ * and mTLS (mutual TLS) settings for TLS-terminated TCP connections.
  *
  * Supports:
  * - PostgreSQL STARTTLS (SSLRequest upgrade from plaintext)
@@ -48,7 +48,7 @@ class TLS
     public const MYSQL_CLIENT_SSL_FLAG = 0x00000800;
 
     /**
-     * Default cipher suites — strong, modern, compatible with database clients
+     * Default cipher suites — strong, modern, broadly compatible
      */
     public const DEFAULT_CIPHERS = 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:'
         . 'ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:'

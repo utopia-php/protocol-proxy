@@ -67,9 +67,7 @@ class TCPAdapterExtendedTest extends TestCase
     public function testDescription(): void
     {
         $adapter = new TCPAdapter($this->resolver, port: 5432);
-        $this->assertStringContainsString('PostgreSQL', $adapter->getDescription());
-        $this->assertStringContainsString('MySQL', $adapter->getDescription());
-        $this->assertStringContainsString('MongoDB', $adapter->getDescription());
+        $this->assertSame('TCP proxy adapter', $adapter->getDescription());
     }
 
     public function testSetConnectTimeoutReturnsSelf(): void
@@ -84,304 +82,6 @@ class TCPAdapterExtendedTest extends TestCase
         $adapter = new TCPAdapter($this->resolver, port: 5432);
         $result = $adapter->setReadWriteSplit(true);
         $this->assertSame($adapter, $result);
-    }
-
-    public function testPostgresParseAlphanumericId(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 5432);
-        $data = "user\x00appwrite\x00database\x00db-ABCdef789\x00";
-
-        $this->assertSame('ABCdef789', $adapter->parseDatabaseId($data, 1));
-    }
-
-    public function testPostgresParseIdWithDotSuffix(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 5432);
-        $data = "user\x00appwrite\x00database\x00db-abc123.us-east-1.example.com\x00";
-
-        // Parsing stops at the dot
-        $this->assertSame('abc123', $adapter->parseDatabaseId($data, 1));
-    }
-
-    public function testPostgresParseIdWithLeadingFields(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 5432);
-        // Extra key-value pairs before "database"
-        $data = "user\x00admin\x00options\x00-c\x00database\x00db-xyz\x00\x00";
-
-        $this->assertSame('xyz', $adapter->parseDatabaseId($data, 1));
-    }
-
-    public function testPostgresRejectsMissingDatabaseMarker(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 5432);
-
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Invalid PostgreSQL database name');
-
-        $adapter->parseDatabaseId("user\x00appwrite\x00", 1);
-    }
-
-    public function testPostgresRejectsMissingNullTerminator(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 5432);
-
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Invalid PostgreSQL database name');
-
-        // No null byte after the database name
-        $adapter->parseDatabaseId("database\x00db-abc123", 1);
-    }
-
-    public function testPostgresRejectsNonDbPrefix(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 5432);
-
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Invalid PostgreSQL database name');
-
-        $adapter->parseDatabaseId("database\x00mydb\x00", 1);
-    }
-
-    public function testPostgresRejectsEmptyIdAfterDbPrefix(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 5432);
-
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Invalid PostgreSQL database name');
-
-        $adapter->parseDatabaseId("database\x00db-\x00", 1);
-    }
-
-    public function testPostgresRejectsSpecialCharactersInId(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 5432);
-
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Invalid PostgreSQL database name');
-
-        $adapter->parseDatabaseId("database\x00db-abc@123\x00", 1);
-    }
-
-    public function testPostgresRejectsHyphenInId(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 5432);
-
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Invalid PostgreSQL database name');
-
-        $adapter->parseDatabaseId("database\x00db-abc-123\x00", 1);
-    }
-
-    public function testPostgresRejectsUnderscoreInId(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 5432);
-
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Invalid PostgreSQL database name');
-
-        $adapter->parseDatabaseId("database\x00db-abc_123\x00", 1);
-    }
-
-    public function testPostgresParsesSingleCharId(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 5432);
-        $data = "database\x00db-x\x00";
-
-        $this->assertSame('x', $adapter->parseDatabaseId($data, 1));
-    }
-
-    public function testPostgresParsesNumericOnlyId(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 5432);
-        $data = "database\x00db-123456\x00";
-
-        $this->assertSame('123456', $adapter->parseDatabaseId($data, 1));
-    }
-
-    public function testMysqlParseAlphanumericId(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 3306);
-        $data = "\x00\x00\x00\x00\x02db-ABCdef789";
-
-        $this->assertSame('ABCdef789', $adapter->parseDatabaseId($data, 1));
-    }
-
-    public function testMysqlParseIdWithNullTerminator(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 3306);
-        $data = "\x00\x00\x00\x00\x02db-abc123\x00extra";
-
-        $this->assertSame('abc123', $adapter->parseDatabaseId($data, 1));
-    }
-
-    public function testMysqlParseIdWithDotSuffix(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 3306);
-        $data = "\x00\x00\x00\x00\x02db-abc123.us-east-1";
-
-        $this->assertSame('abc123', $adapter->parseDatabaseId($data, 1));
-    }
-
-    public function testMysqlRejectsTooShortPacket(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 3306);
-
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Invalid MySQL database name');
-
-        $adapter->parseDatabaseId("\x00\x00\x00\x00\x02", 1);
-    }
-
-    public function testMysqlRejectsWrongCommandByte(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 3306);
-
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Invalid MySQL database name');
-
-        // Command byte 0x03 instead of 0x02
-        $adapter->parseDatabaseId("\x00\x00\x00\x00\x03db-abc123", 1);
-    }
-
-    public function testMysqlRejectsNonDbPrefix(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 3306);
-
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Invalid MySQL database name');
-
-        $adapter->parseDatabaseId("\x00\x00\x00\x00\x02mydb", 1);
-    }
-
-    public function testMysqlRejectsEmptyIdAfterDbPrefix(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 3306);
-
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Invalid MySQL database name');
-
-        $adapter->parseDatabaseId("\x00\x00\x00\x00\x02db-", 1);
-    }
-
-    public function testMysqlRejectsSpecialCharactersInId(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 3306);
-
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Invalid MySQL database name');
-
-        $adapter->parseDatabaseId("\x00\x00\x00\x00\x02db-abc!123", 1);
-    }
-
-    public function testMysqlRejectsEmptyPacket(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 3306);
-
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Invalid MySQL database name');
-
-        $adapter->parseDatabaseId('', 1);
-    }
-
-    public function testMongoParsesDatabaseId(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 27017);
-
-        // Build a MongoDB OP_MSG-like packet with $db field
-        // "$db\0" marker followed by BSON string length (little-endian) and the string
-        $dbName = "db-abc123\x00"; // null-terminated
-        $strLen = pack('V', strlen($dbName)); // 10 as 4 bytes LE
-        $data = str_repeat("\x00", 21) . "\$db\x00" . $strLen . $dbName;
-
-        $this->assertSame('abc123', $adapter->parseDatabaseId($data, 1));
-    }
-
-    public function testMongoParsesIdWithDotSuffix(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 27017);
-
-        $dbName = "db-xyz789.collection\x00";
-        $strLen = pack('V', strlen($dbName));
-        $data = str_repeat("\x00", 21) . "\$db\x00" . $strLen . $dbName;
-
-        $this->assertSame('xyz789', $adapter->parseDatabaseId($data, 1));
-    }
-
-    public function testMongoRejectsMissingDbMarker(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 27017);
-
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Invalid MongoDB database name');
-
-        $adapter->parseDatabaseId(str_repeat("\x00", 50), 1);
-    }
-
-    public function testMongoRejectsNonDbPrefix(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 27017);
-
-        $dbName = "mydb\x00";
-        $strLen = pack('V', strlen($dbName));
-        $data = "\$db\x00" . $strLen . $dbName;
-
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Invalid MongoDB database name');
-
-        $adapter->parseDatabaseId($data, 1);
-    }
-
-    public function testMongoRejectsEmptyIdAfterDbPrefix(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 27017);
-
-        $dbName = "db-\x00";
-        $strLen = pack('V', strlen($dbName));
-        $data = "\$db\x00" . $strLen . $dbName;
-
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Invalid MongoDB database name');
-
-        $adapter->parseDatabaseId($data, 1);
-    }
-
-    public function testMongoRejectsTruncatedData(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 27017);
-
-        // "$db\0" marker but not enough bytes for the string length
-        $data = "\$db\x00\x0A";
-
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Invalid MongoDB database name');
-
-        $adapter->parseDatabaseId($data, 1);
-    }
-
-    public function testMongoRejectsSpecialCharactersInId(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 27017);
-
-        $dbName = "db-abc@123\x00";
-        $strLen = pack('V', strlen($dbName));
-        $data = "\$db\x00" . $strLen . $dbName;
-
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Invalid MongoDB database name');
-
-        $adapter->parseDatabaseId($data, 1);
-    }
-
-    public function testMongoParsesAlphanumericId(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 27017);
-
-        $dbName = "db-ABCdef789\x00";
-        $strLen = pack('V', strlen($dbName));
-        $data = "\$db\x00" . $strLen . $dbName;
-
-        $this->assertSame('ABCdef789', $adapter->parseDatabaseId($data, 1));
     }
 
     public function testClearConnectionStateForNonExistentFd(): void
@@ -404,7 +104,6 @@ class TCPAdapterExtendedTest extends TestCase
     {
         $this->rwResolver->setEndpoint('primary.db:5432');
         $this->rwResolver->setWriteEndpoint('primary.db:5432');
-        // No read endpoint set
 
         $adapter = new TCPAdapter($this->rwResolver, port: 5432);
         $adapter->setReadWriteSplit(true);
@@ -419,7 +118,6 @@ class TCPAdapterExtendedTest extends TestCase
     {
         $this->rwResolver->setEndpoint('primary.db:5432');
         $this->rwResolver->setReadEndpoint('replica.db:5432');
-        // No write endpoint set
 
         $adapter = new TCPAdapter($this->rwResolver, port: 5432);
         $adapter->setReadWriteSplit(true);
@@ -465,7 +163,6 @@ class TCPAdapterExtendedTest extends TestCase
     public function testRouteQueryReadIncrementsErrorStatsOnFailure(): void
     {
         $this->rwResolver->setEndpoint('primary.db:5432');
-        // No read endpoint — will throw
 
         $adapter = new TCPAdapter($this->rwResolver, port: 5432);
         $adapter->setReadWriteSplit(true);
@@ -485,7 +182,6 @@ class TCPAdapterExtendedTest extends TestCase
     public function testRouteQueryWriteIncrementsErrorStatsOnFailure(): void
     {
         $this->rwResolver->setEndpoint('primary.db:5432');
-        // No write endpoint — will throw
 
         $adapter = new TCPAdapter($this->rwResolver, port: 5432);
         $adapter->setReadWriteSplit(true);
@@ -542,7 +238,6 @@ class TCPAdapterExtendedTest extends TestCase
         $this->rwResolver->setReadEndpoint('10.0.0.1:5432');
         $adapter = new TCPAdapter($this->rwResolver, port: 5432);
         $adapter->setReadWriteSplit(true);
-        // Validation is ON (default)
 
         $this->expectException(ResolverException::class);
         $this->expectExceptionMessage('private/reserved IP');

@@ -35,8 +35,11 @@ class Adapter
     /** @var array<string, array{inbound: int, outbound: int}> Byte counters per resource since last flush */
     protected array $byteCounters = [];
 
+    /** @var \Closure|null Custom resolve callback, checked before the resolver */
+    protected ?\Closure $resolveCallback = null;
+
     public function __construct(
-        public Resolver $resolver {
+        public ?Resolver $resolver = null {
             get {
                 return $this->resolver;
             }
@@ -59,6 +62,18 @@ class Adapter
     }
 
     /**
+     * Set a custom resolve callback that is checked before the resolver
+     *
+     * The callback receives a resource ID and should return a Resolver\Result.
+     */
+    public function onResolve(callable $callback): static
+    {
+        $this->resolveCallback = $callback(...);
+
+        return $this;
+    }
+
+    /**
      * Skip SSRF validation for trusted backends
      */
     public function setSkipValidation(bool $skip): static
@@ -75,7 +90,7 @@ class Adapter
      */
     public function notifyConnect(string $resourceId, array $metadata = []): void
     {
-        $this->resolver->onConnect($resourceId, $metadata);
+        $this->resolver?->onConnect($resourceId, $metadata);
     }
 
     /**
@@ -92,7 +107,7 @@ class Adapter
             unset($this->byteCounters[$resourceId]);
         }
 
-        $this->resolver->onDisconnect($resourceId, $metadata);
+        $this->resolver?->onDisconnect($resourceId, $metadata);
         unset($this->lastActivityUpdate[$resourceId]);
     }
 
@@ -133,7 +148,7 @@ class Adapter
             $this->byteCounters[$resourceId] = ['inbound' => 0, 'outbound' => 0];
         }
 
-        $this->resolver->track($resourceId, $metadata);
+        $this->resolver?->track($resourceId, $metadata);
     }
 
     /**
@@ -190,7 +205,19 @@ class Adapter
         $this->stats['cacheMisses']++;
 
         try {
-            $result = $this->resolver->resolve($resourceId);
+            if ($this->resolveCallback !== null) {
+                $resolved = ($this->resolveCallback)($resourceId);
+                $result = $resolved instanceof Resolver\Result
+                    ? $resolved
+                    : new Resolver\Result(endpoint: (string) $resolved);
+            } elseif ($this->resolver !== null) {
+                $result = $this->resolver->resolve($resourceId);
+            } else {
+                throw new ResolverException(
+                    "No resolver or resolve callback configured",
+                    ResolverException::NOT_FOUND
+                );
+            }
             $endpoint = $result->endpoint;
 
             if (empty($endpoint)) {
@@ -307,7 +334,7 @@ class Adapter
             'routingErrors' => $this->stats['routingErrors'],
             'routingTableMemory' => $this->router->memorySize,
             'routingTableSize' => $this->router->count(),
-            'resolver' => $this->resolver->getStats(),
+            'resolver' => $this->resolver?->getStats() ?? [],
         ];
     }
 }

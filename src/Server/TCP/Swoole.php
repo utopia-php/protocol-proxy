@@ -13,7 +13,7 @@ use Utopia\Query\Type as QueryType;
 /**
  * High-performance TCP proxy server (Swoole Implementation)
  *
- * Supports optional TLS termination for database connections:
+ * Supports optional TLS termination:
  * - PostgreSQL: STARTTLS via SSLRequest/SSLResponse handshake
  * - MySQL: SSL capability flag in server greeting
  *
@@ -50,9 +50,6 @@ class Swoole
     /** @var array<int, Client> Read replica backend connections (when read/write split enabled) */
     protected array $readBackendClients = [];
 
-    /** @var array<int, string> */
-    protected array $clientDatabaseIds = [];
-
     /** @var array<int, int> */
     protected array $clientPorts = [];
 
@@ -65,11 +62,49 @@ class Swoole
      */
     protected array $pendingTlsUpgrade = [];
 
+    protected ?Resolver $resolver;
+
+    /**
+     * @param  Resolver|string|null  $resolver  Resolver instance, or host string for named-param style
+     * @param  Config|array<string, mixed>|null  $config  Config object or array of settings
+     * @param  string|null  $host  Host address (named-param style)
+     * @param  array<int, int>|null  $ports  Port list (named-param style)
+     * @param  int|null  $workers  Worker count (named-param style)
+     */
     public function __construct(
-        protected Resolver $resolver,
-        ?Config $config = null,
+        Resolver|string|null $resolver = null,
+        Config|array|null $config = null,
+        ?string $host = null,
+        ?array $ports = null,
+        ?int $workers = null,
     ) {
-        $this->config = $config ?? new Config();
+        // Detect named-param style: first arg is a string host, not a Resolver
+        if (\is_string($resolver)) {
+            $host = $resolver;
+            $this->resolver = null;
+        } else {
+            $this->resolver = $resolver;
+        }
+
+        // Build Config from array or named params
+        if (\is_array($config)) {
+            $this->config = self::buildConfigFromArray($config, $host, $ports, $workers);
+        } elseif ($config instanceof Config) {
+            $this->config = $config;
+        } else {
+            // Build from named params with defaults
+            $args = [];
+            if ($host !== null) {
+                $args['host'] = $host;
+            }
+            if ($ports !== null) {
+                $args['ports'] = $ports;
+            }
+            if ($workers !== null) {
+                $args['workers'] = $workers;
+            }
+            $this->config = new Config(...$args);
+        }
 
         if ($this->config->isTlsEnabled()) {
             /** @var TLS $tls */
@@ -102,6 +137,46 @@ class Swoole
         $this->configure();
     }
 
+    /**
+     * Build a Config object from an associative array of settings
+     *
+     * @param  array<string, mixed>  $settings
+     */
+    protected static function buildConfigFromArray(
+        array $settings,
+        ?string $host = null,
+        ?array $ports = null,
+        ?int $workers = null,
+    ): Config {
+        return new Config(
+            host: $host ?? ($settings['host'] ?? '0.0.0.0'),
+            ports: $ports ?? ($settings['ports'] ?? [5432, 3306, 27017]),
+            workers: $workers ?? ($settings['workers'] ?? 16),
+            maxConnections: $settings['max_connections'] ?? 200_000,
+            maxCoroutine: $settings['max_coroutine'] ?? 200_000,
+            socketBufferSize: $settings['socket_buffer_size'] ?? 16 * 1024 * 1024,
+            bufferOutputSize: $settings['buffer_output_size'] ?? 16 * 1024 * 1024,
+            reactorNum: $settings['reactor_num'] ?? null,
+            dispatchMode: $settings['dispatch_mode'] ?? 2,
+            enableReusePort: $settings['enable_reuse_port'] ?? true,
+            backlog: $settings['backlog'] ?? 65535,
+            packageMaxLength: $settings['package_max_length'] ?? 32 * 1024 * 1024,
+            tcpKeepidle: $settings['tcp_keepidle'] ?? 30,
+            tcpKeepinterval: $settings['tcp_keepinterval'] ?? 10,
+            tcpKeepcount: $settings['tcp_keepcount'] ?? 3,
+            enableCoroutine: $settings['enable_coroutine'] ?? true,
+            maxWaitTime: $settings['max_wait_time'] ?? 60,
+            logLevel: $settings['log_level'] ?? SWOOLE_LOG_ERROR,
+            logConnections: $settings['log_connections'] ?? false,
+            recvBufferSize: $settings['recv_buffer_size'] ?? 131072,
+            backendConnectTimeout: $settings['backend_connect_timeout'] ?? 5.0,
+            skipValidation: $settings['skip_validation'] ?? false,
+            readWriteSplit: $settings['read_write_split'] ?? false,
+            tls: $settings['tls'] ?? null,
+            adapterFactory: $settings['adapter_factory'] ?? null,
+        );
+    }
+
     protected function configure(): void
     {
         $settings = [
@@ -128,8 +203,7 @@ class Swoole
             'tcp_keepinterval' => $this->config->tcpKeepinterval,
             'tcp_keepcount' => $this->config->tcpKeepcount,
 
-            // Package settings for database protocols
-            'open_length_check' => false, // Let database handle framing
+            'open_length_check' => false,
             'package_max_length' => $this->config->packageMaxLength,
 
             // Enable stats
@@ -169,7 +243,11 @@ class Swoole
     {
         // Initialize TCP adapter per worker per port
         foreach ($this->config->ports as $port) {
-            $adapter = new TCPAdapter($this->resolver, port: $port);
+            if ($this->config->adapterFactory !== null) {
+                $adapter = ($this->config->adapterFactory)($port);
+            } else {
+                $adapter = new TCPAdapter($this->resolver, port: $port);
+            }
 
             if ($this->config->skipValidation) {
                 $adapter->setSkipValidation(true);
@@ -214,16 +292,16 @@ class Swoole
      */
     public function onReceive(Server $server, int $fd, int $reactorId, string $data): void
     {
+        $fdKey = (string) $fd;
+
         // Fast path: existing connection - forward to appropriate backend
         if (isset($this->backendClients[$fd])) {
-            $databaseId = $this->clientDatabaseIds[$fd] ?? null;
             $port = $this->clientPorts[$fd] ?? 5432;
             $adapter = $this->adapters[$port] ?? null;
 
-            // Record inbound bytes and track activity
-            if ($databaseId !== null && $adapter !== null) {
-                $adapter->recordBytes($databaseId, \strlen($data), 0);
-                $adapter->track($databaseId);
+            if ($adapter !== null) {
+                $adapter->recordBytes($fdKey, \strlen($data), 0);
+                $adapter->track($fdKey);
             }
 
             // When read/write split is active and we have a read backend, classify and route
@@ -243,16 +321,9 @@ class Swoole
         }
 
         // Handle PostgreSQL STARTTLS: SSLRequest comes before the real startup message.
-        // When TLS is enabled with Swoole's native SSL, the TLS handshake happens at the
-        // transport level. However, PostgreSQL clients send an SSLRequest message first
-        // (at the application layer) to negotiate TLS. We intercept this, respond with 'S'
-        // to indicate willingness, and then Swoole handles the actual TLS upgrade.
-        // The next onReceive call will contain the real startup message over TLS.
         if ($this->tlsContext !== null && TLS::isPostgreSQLSSLRequest($data)) {
             $port = $this->clientPorts[$fd] ?? null;
             if ($port !== null && $port === 5432) {
-                // Respond with 'S' to indicate SSL is supported, then Swoole
-                // handles the TLS handshake natively on the already-SSL socket
                 $server->send($fd, TLS::PG_SSL_RESPONSE_OK);
                 $this->pendingTlsUpgrade[$fd] = true;
 
@@ -260,9 +331,6 @@ class Swoole
             }
         }
 
-        // After PostgreSQL SSLRequest -> 'S' response, the client performs the TLS
-        // handshake (handled by Swoole at transport level), then sends the real
-        // startup message. Clear the pending flag and continue to normal processing.
         if (isset($this->pendingTlsUpgrade[$fd])) {
             unset($this->pendingTlsUpgrade[$fd]);
         }
@@ -286,23 +354,19 @@ class Swoole
                 throw new \Exception("No adapter registered for port {$port}");
             }
 
-            // Parse database ID from initial packet
-            $databaseId = $adapter->parseDatabaseId($data, $fd);
-            $this->clientDatabaseIds[$fd] = $databaseId;
-
-            // Get primary backend connection
-            $backendClient = $adapter->getBackendConnection($databaseId, $fd);
+            // Route via resolver — the resolver receives raw initial data
+            // and is responsible for extracting any routing information
+            $backendClient = $adapter->getBackendConnection($data, $fd);
             $this->backendClients[$fd] = $backendClient;
 
             // If read/write split is enabled, establish read replica connection
             if ($adapter->isReadWriteSplit() && $this->resolver instanceof ReadWriteResolver) {
                 try {
-                    $readResult = $adapter->routeQuery($databaseId, QueryType::Read);
+                    $readResult = $adapter->routeQuery($data, QueryType::Read);
                     $readEndpoint = $readResult->endpoint;
                     [$readHost, $readPort] = \explode(':', $readEndpoint . ':' . $port);
 
-                    // Only create separate read connection if it differs from the write endpoint
-                    $writeResult = $adapter->routeQuery($databaseId, QueryType::Write);
+                    $writeResult = $adapter->routeQuery($data, QueryType::Write);
                     if ($readEndpoint !== $writeResult->endpoint) {
                         $readClient = new \Swoole\Coroutine\Client(SWOOLE_SOCK_TCP);
                         $readClient->set([
@@ -314,22 +378,18 @@ class Swoole
 
                         if ($readClient->connect($readHost, (int) $readPort, $this->config->backendConnectTimeout)) {
                             $this->readBackendClients[$fd] = $readClient;
-                            // Forward initial startup message to read replica too
                             $readClient->send($data);
-                            // Start forwarding from read replica back to client
                             $this->startForwarding($server, $fd, $readClient);
                         }
                     }
                 } catch (\Exception $e) {
-                    // Read replica unavailable — all traffic goes to primary
                     if ($this->config->logConnections) {
                         echo "Read replica unavailable for #{$fd}: {$e->getMessage()}\n";
                     }
                 }
             }
 
-            // Notify connect callback
-            $adapter->notifyConnect($databaseId);
+            $adapter->notifyConnect($fdKey);
 
             // Forward initial data to primary
             $backendClient->send($data);
@@ -355,19 +415,19 @@ class Swoole
         /** @var \Swoole\Coroutine\Socket $backendSocket */
         $backendSocket = $backendClient->exportSocket();
 
-        $databaseId = $this->clientDatabaseIds[$clientFd] ?? null;
+        $fdKey = (string) $clientFd;
         $port = $this->clientPorts[$clientFd] ?? null;
         $adapter = ($port !== null) ? ($this->adapters[$port] ?? null) : null;
 
-        Coroutine::create(function () use ($server, $clientFd, $backendSocket, $bufferSize, $databaseId, $adapter) {
+        Coroutine::create(function () use ($server, $clientFd, $backendSocket, $bufferSize, $fdKey, $adapter) {
             while ($server->exist($clientFd)) {
                 /** @var string|false $data */
                 $data = $backendSocket->recv($bufferSize);
                 if ($data === false || $data === '') {
                     break;
                 }
-                if ($databaseId !== null && $adapter !== null) {
-                    $adapter->recordBytes($databaseId, 0, \strlen($data));
+                if ($adapter !== null) {
+                    $adapter->recordBytes($fdKey, 0, \strlen($data));
                 }
                 $server->send($clientFd, $data);
             }
@@ -390,20 +450,17 @@ class Swoole
             unset($this->readBackendClients[$fd]);
         }
 
-        // Clean up adapter's connection pool and transaction pinning state
-        if (isset($this->clientDatabaseIds[$fd]) && isset($this->clientPorts[$fd])) {
+        if (isset($this->clientPorts[$fd])) {
             $port = $this->clientPorts[$fd];
-            $databaseId = $this->clientDatabaseIds[$fd];
             $adapter = $this->adapters[$port] ?? null;
             if ($adapter) {
-                $adapter->notifyClose($databaseId);
-                $adapter->closeBackendConnection($databaseId, $fd);
+                $adapter->notifyClose((string) $fd);
+                $adapter->closeBackendConnection($fd);
                 $adapter->clearConnectionState($fd);
             }
         }
 
         unset($this->forwarding[$fd]);
-        unset($this->clientDatabaseIds[$fd]);
         unset($this->clientPorts[$fd]);
         unset($this->pendingTlsUpgrade[$fd]);
     }

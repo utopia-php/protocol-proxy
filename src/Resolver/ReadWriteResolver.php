@@ -16,7 +16,7 @@ interface ReadWriteResolver extends Resolver
     /**
      * Resolve a resource identifier to a read replica endpoint
      *
-     * @param  string  $resourceId  Protocol-specific identifier (database ID, hostname, etc.)
+     * @param  string  $resourceId  Protocol-specific identifier (hostname, SNI, etc.)
      * @return Result Backend endpoint for read operations (replica)
      *
      * @throws Exception If resource not found or unavailable
@@ -26,7 +26,7 @@ interface ReadWriteResolver extends Resolver
     /**
      * Resolve a resource identifier to a primary/writer endpoint
      *
-     * @param  string  $resourceId  Protocol-specific identifier (database ID, hostname, etc.)
+     * @param  string  $resourceId  Protocol-specific identifier (hostname, SNI, etc.)
      * @return Result Backend endpoint for write operations (primary)
      *
      * @throws Exception If resource not found or unavailable

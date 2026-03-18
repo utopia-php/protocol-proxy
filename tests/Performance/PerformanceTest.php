@@ -7,7 +7,7 @@ namespace Utopia\Tests\Performance;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Performance benchmark tests for the protocol-proxy TCP server.
+ * Performance benchmark tests for the proxy TCP server.
  *
  * These tests measure throughput, latency, and scalability of the Swoole TCP
  * proxy server. They require a running proxy server and should only be run
@@ -22,7 +22,7 @@ use PHPUnit\Framework\TestCase;
  *   PERF_PROXY_MYSQL_PORT        Proxy MySQL port (default: 3306)
  *   PERF_ITERATIONS              Number of iterations per benchmark (default: 1000)
  *   PERF_WARMUP_ITERATIONS       Number of warmup iterations (default: 100)
- *   PERF_DATABASE_ID             Database ID for resolver (default: test-db)
+ *   PERF_DATABASE_ID             Resource ID for resolver (default: test-db)
  *   PERF_TARGET_CONN_RATE        Target connections/sec (default: 10000)
  *   PERF_MAX_CONNECTIONS          Max connections for exhaustion test (default: 10000)
  *   PERF_READ_WRITE_SPLIT_PORT   Port with read/write split enabled (default: 0, disabled)
@@ -40,7 +40,7 @@ final class PerformanceTest extends TestCase
     private int $port;
     private int $iterations;
     private int $warmupIterations;
-    private string $databaseId;
+    private string $resourceId;
     private int $targetConnRate;
     private int $maxConnections;
     private int $readWriteSplitPort;
@@ -99,7 +99,7 @@ final class PerformanceTest extends TestCase
         $this->port = (int) (getenv('PERF_PROXY_PORT') ?: 5432);
         $this->iterations = (int) (getenv('PERF_ITERATIONS') ?: 1000);
         $this->warmupIterations = (int) (getenv('PERF_WARMUP_ITERATIONS') ?: 100);
-        $this->databaseId = getenv('PERF_DATABASE_ID') ?: 'test-db';
+        $this->resourceId = getenv('PERF_DATABASE_ID') ?: 'test-db';
         $this->targetConnRate = (int) (getenv('PERF_TARGET_CONN_RATE') ?: 10000);
         $this->maxConnections = (int) (getenv('PERF_MAX_CONNECTIONS') ?: 10000);
         $this->readWriteSplitPort = (int) (getenv('PERF_READ_WRITE_SPLIT_PORT') ?: 0);
@@ -551,7 +551,7 @@ final class PerformanceTest extends TestCase
             foreach ($sockets as $sock) {
                 stream_set_blocking($sock, true);
                 stream_set_timeout($sock, 1);
-                $startupMsg = $this->buildStartupMessage($this->databaseId);
+                $startupMsg = $this->buildStartupMessage($this->resourceId);
                 @fwrite($sock, $startupMsg);
             }
 
@@ -678,9 +678,9 @@ final class PerformanceTest extends TestCase
      *   String "database" \0 String "db-<id>" \0
      *   \0 (terminator)
      */
-    private function buildStartupMessage(string $databaseId): string
+    private function buildStartupMessage(string $resourceId): string
     {
-        $params = "user\x00appwrite\x00database\x00db-{$databaseId}\x00\x00";
+        $params = "user\x00appwrite\x00database\x00db-{$resourceId}\x00\x00";
         $protocolVersion = pack('N', 196608); // 3.0
         $length = 4 + strlen($protocolVersion) + strlen($params);
 
@@ -723,7 +723,7 @@ final class PerformanceTest extends TestCase
 
         stream_set_timeout($sock, 5);
 
-        $startupMsg = $this->buildStartupMessage($this->databaseId);
+        $startupMsg = $this->buildStartupMessage($this->resourceId);
         $written = @fwrite($sock, $startupMsg);
 
         if ($written === false || $written === 0) {
@@ -793,7 +793,7 @@ final class PerformanceTest extends TestCase
         stream_set_timeout($sock, 5);
 
         // Send startup
-        $startupMsg = $this->buildStartupMessage($this->databaseId);
+        $startupMsg = $this->buildStartupMessage($this->resourceId);
         @fwrite($sock, $startupMsg);
 
         // Read startup response

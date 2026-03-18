@@ -34,6 +34,7 @@ class Config
         public readonly bool $skipValidation = false,
         public readonly bool $readWriteSplit = false,
         public readonly ?TLS $tls = null,
+        public readonly ?\Closure $adapterFactory = null,
     ) {
         $this->reactorNum = $reactorNum ?? swoole_cpu_num() * 2;
     }

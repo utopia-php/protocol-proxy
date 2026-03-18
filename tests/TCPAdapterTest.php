@@ -19,41 +19,33 @@ class TCPAdapterTest extends TestCase
         $this->resolver = new MockResolver();
     }
 
-    public function testPostgresDatabaseIdParsing(): void
+    public function testProtocolDetection(): void
+    {
+        $pg = new TCPAdapter($this->resolver, port: 5432);
+        $this->assertSame(Protocol::PostgreSQL, $pg->getProtocol());
+
+        $mysql = new TCPAdapter($this->resolver, port: 3306);
+        $this->assertSame(Protocol::MySQL, $mysql->getProtocol());
+
+        $mongo = new TCPAdapter($this->resolver, port: 27017);
+        $this->assertSame(Protocol::MongoDB, $mongo->getProtocol());
+    }
+
+    public function testDescription(): void
     {
         $adapter = new TCPAdapter($this->resolver, port: 5432);
-        $data = "user\x00appwrite\x00database\x00db-abc123\x00";
-
-        $this->assertSame('abc123', $adapter->parseDatabaseId($data, 1));
-        $this->assertSame(Protocol::PostgreSQL, $adapter->getProtocol());
+        $this->assertSame('TCP proxy adapter', $adapter->getDescription());
     }
 
-    public function testMySqlDatabaseIdParsing(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 3306);
-        $data = "\x00\x00\x00\x00\x02db-xyz789";
-
-        $this->assertSame('xyz789', $adapter->parseDatabaseId($data, 1));
-        $this->assertSame(Protocol::MySQL, $adapter->getProtocol());
-    }
-
-    public function testPostgresDatabaseIdParsingFailsOnInvalidData(): void
+    public function testName(): void
     {
         $adapter = new TCPAdapter($this->resolver, port: 5432);
-
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Invalid PostgreSQL database name');
-
-        $adapter->parseDatabaseId('invalid', 1);
+        $this->assertSame('TCP', $adapter->getName());
     }
 
-    public function testMySqlDatabaseIdParsingFailsOnInvalidData(): void
+    public function testPort(): void
     {
         $adapter = new TCPAdapter($this->resolver, port: 3306);
-
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Invalid MySQL database name');
-
-        $adapter->parseDatabaseId("\x00\x00\x00\x00\x01db-xyz", 1);
+        $this->assertSame(3306, $adapter->port);
     }
 }

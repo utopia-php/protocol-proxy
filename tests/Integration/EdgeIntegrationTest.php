@@ -13,11 +13,11 @@ use Utopia\Proxy\Resolver\Result;
 use Utopia\Query\Type as QueryType;
 
 /**
- * Integration test for the protocol-proxy's ability to resolve database
+ * Integration test for the proxy's ability to resolve resource
  * connections via an Edge-like adapter pattern.
  *
  * These tests simulate the full resolution flow that occurs in production
- * when the protocol-proxy calls the Edge service to resolve a database ID
+ * when the proxy calls the Edge service to resolve a resource ID
  * to a backend endpoint containing host, port, username, and password.
  *
  * @group integration
@@ -76,10 +76,10 @@ class EdgeIntegrationTest extends TestCase
     /**
      * @group integration
      */
-    public function testDatabaseIdExtractionFeedsIntoResolution(): void
+    public function testResolverReceivesRawDataForRouting(): void
     {
         $resolver = new EdgeMockResolver();
-        $resolver->registerDatabase('abc123', [
+        $resolver->registerDatabase('raw-packet-data', [
             'host' => '10.0.1.50',
             'port' => 5432,
             'username' => 'user1',
@@ -89,41 +89,9 @@ class EdgeIntegrationTest extends TestCase
         $adapter = new TCPAdapter($resolver, port: 5432);
         $adapter->setSkipValidation(true);
 
-        // Simulate PostgreSQL startup message containing "database\0db-abc123\0"
-        $startupData = "user\x00appwrite\x00database\x00db-abc123\x00";
-
-        $databaseId = $adapter->parseDatabaseId($startupData, 1);
-        $this->assertSame('abc123', $databaseId);
-
-        $result = $adapter->route($databaseId);
+        // The resolver receives the raw data directly and routes based on it
+        $result = $adapter->route('raw-packet-data');
         $this->assertSame('10.0.1.50:5432', $result->endpoint);
-    }
-
-    /**
-     * @group integration
-     */
-    public function testMysqlDatabaseIdExtractionFeedsIntoResolution(): void
-    {
-        $resolver = new EdgeMockResolver();
-        $resolver->registerDatabase('xyz789', [
-            'host' => '10.0.2.30',
-            'port' => 3306,
-            'username' => 'mysql_user',
-            'password' => 'mysql_pass',
-        ]);
-
-        $adapter = new TCPAdapter($resolver, port: 3306);
-        $adapter->setSkipValidation(true);
-
-        // Simulate MySQL COM_INIT_DB packet
-        $mysqlData = "\x00\x00\x00\x00\x02db-xyz789";
-
-        $databaseId = $adapter->parseDatabaseId($mysqlData, 1);
-        $this->assertSame('xyz789', $databaseId);
-
-        $result = $adapter->route($databaseId);
-        $this->assertSame('10.0.2.30:3306', $result->endpoint);
-        $this->assertSame(Protocol::MySQL, $result->protocol);
     }
 
     /**
@@ -636,10 +604,9 @@ class EdgeIntegrationTest extends TestCase
 }
 
 /**
- * Simulates an Edge service resolver that resolves database IDs to backend
- * endpoints via HTTP lookups. In production, the resolve() call would be an
- * HTTP request to the Edge service. Here we simulate that with an in-memory
- * registry.
+ * Simulates an Edge service resolver that resolves resource IDs to backend
+ * endpoints. In production, the resolve() call would be an HTTP request to
+ * the Edge service. Here we simulate that with an in-memory registry.
  */
 class EdgeMockResolver implements Resolver
 {
@@ -667,9 +634,9 @@ class EdgeMockResolver implements Resolver
      *
      * @param array{host: string, port: int, username: string, password: string} $config
      */
-    public function registerDatabase(string $databaseId, array $config): self
+    public function registerDatabase(string $resourceId, array $config): self
     {
-        $this->databases[$databaseId] = $config;
+        $this->databases[$resourceId] = $config;
 
         return $this;
     }
@@ -785,9 +752,9 @@ class EdgeMockReadWriteResolver extends EdgeMockResolver implements ReadWriteRes
     /**
      * @param array{host: string, port: int, username: string, password: string} $config
      */
-    public function registerReadReplica(string $databaseId, array $config): self
+    public function registerReadReplica(string $resourceId, array $config): self
     {
-        $this->readReplicas[$databaseId] = $config;
+        $this->readReplicas[$resourceId] = $config;
 
         return $this;
     }
@@ -795,9 +762,9 @@ class EdgeMockReadWriteResolver extends EdgeMockResolver implements ReadWriteRes
     /**
      * @param array{host: string, port: int, username: string, password: string} $config
      */
-    public function registerWritePrimary(string $databaseId, array $config): self
+    public function registerWritePrimary(string $resourceId, array $config): self
     {
-        $this->writePrimaries[$databaseId] = $config;
+        $this->writePrimaries[$resourceId] = $config;
 
         return $this;
     }
