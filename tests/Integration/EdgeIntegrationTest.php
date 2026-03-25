@@ -213,9 +213,10 @@ class EdgeIntegrationTest extends TestCase
 
         $adapter = new TCPAdapter(port: 5432, resolver: $resolver);
         $adapter->setSkipValidation(true);
+        $adapter->setCacheTTL(60);
 
         // Ensure we are at the start of a fresh second so both calls
-        // land within the same 1-second cache window
+        // land within the same cache window
         $start = time();
         while (time() === $start) {
             usleep(1000);
@@ -246,6 +247,7 @@ class EdgeIntegrationTest extends TestCase
 
         $adapter = new TCPAdapter(port: 5432, resolver: $resolver);
         $adapter->setSkipValidation(true);
+        $adapter->setCacheTTL(1);
 
         // Align to second boundary
         $start = time();
@@ -256,10 +258,9 @@ class EdgeIntegrationTest extends TestCase
         $first = $adapter->route('invaldb');
         $this->assertFalse($first->metadata['cached']);
 
-        // Invalidate the resolver cache
         $resolver->purge('invaldb');
 
-        // Wait for the routing table cache to expire (1 second TTL)
+        // Wait for the routing table cache to expire
         sleep(2);
 
         $second = $adapter->route('invaldb');
@@ -318,19 +319,18 @@ class EdgeIntegrationTest extends TestCase
 
         $adapter = new TCPAdapter(port: 5432, resolver: $resolver);
         $adapter->setSkipValidation(true);
+        $adapter->setCacheTTL(60);
 
         $results = [];
         for ($i = 1; $i <= $databaseCount; $i++) {
             $results[$i] = $adapter->route("concurrent{$i}");
         }
 
-        // Verify each database resolved to its correct endpoint
         for ($i = 1; $i <= $databaseCount; $i++) {
             $this->assertSame("10.0.10.{$i}:5432", $results[$i]->endpoint);
             $this->assertSame(Protocol::PostgreSQL, $results[$i]->protocol);
         }
 
-        // All should have been cache misses (first resolution)
         $stats = $adapter->getStats();
         $this->assertSame($databaseCount, $stats['cacheMisses']);
         $this->assertSame(0, $stats['cacheHits']);
