@@ -1,4 +1,4 @@
-# Appwrite Protocol Proxy
+# Utopia Proxy
 
 High-performance, protocol-agnostic proxy built on Swoole for blazing fast connection management across HTTP, TCP, and SMTP protocols.
 
@@ -238,9 +238,9 @@ use Utopia\Proxy\Server\TCP\TLS;
 use Utopia\Proxy\Server\TCP\Swoole as TCPServer;
 
 $tls = new TLS(
-    certPath: '/certs/server.crt',
-    keyPath: '/certs/server.key',
-    caPath: '/certs/ca.crt',           // Optional: for mTLS
+    certificate: '/certs/server.crt',
+    key: '/certs/server.key',
+    ca: '/certs/ca.crt',           // Optional: for mTLS
     requireClientCert: true,            // Optional: require client certs
 );
 
@@ -310,7 +310,7 @@ $config = new Config(
     socketBufferSize: 16 * 1024 * 1024,
     bufferOutputSize: 16 * 1024 * 1024,
     recvBufferSize: 131_072,
-    backendConnectTimeout: 5.0,
+    connectTimeout: 5.0,
     readWriteSplit: false,
     skipValidation: false,
     tls: null,
@@ -390,7 +390,7 @@ composer check
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        Protocol Proxy                           │
+│                         Utopia Proxy                            │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │  ┌──────────┐      ┌──────────┐      ┌──────────┐              │
