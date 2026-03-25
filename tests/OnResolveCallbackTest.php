@@ -156,7 +156,7 @@ class OnResolveCallbackTest extends TestCase
     {
         $resolverCalled = false;
 
-        $mockResolver = new class extends MockResolver {
+        $mockResolver = new class () extends MockResolver {
             public bool $wasCalled = false;
 
             public function __construct()
