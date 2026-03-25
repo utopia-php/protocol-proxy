@@ -26,6 +26,9 @@ class Adapter
     /** @var bool Skip SSRF validation for trusted backends */
     protected bool $skipValidation = false;
 
+    /** @var int Routing cache TTL in seconds (0 disables caching) */
+    protected int $cacheTTL = 0;
+
     /** @var int Activity tracking interval in seconds */
     protected int $interval = 30;
 
@@ -78,6 +81,13 @@ class Adapter
     public function setSkipValidation(bool $skip): static
     {
         $this->skipValidation = $skip;
+
+        return $this;
+    }
+
+    public function setCacheTtl(int $seconds): static
+    {
+        $this->cacheTTL = $seconds;
 
         return $this;
     }
@@ -174,20 +184,23 @@ class Adapter
      */
     public function route(string $resourceId): ConnectionResult
     {
-        $cached = $this->router->get($resourceId);
         $now = \time();
 
-        if ($cached !== false && \is_array($cached)) {
-            /** @var array{endpoint: string, updated: int} $cached */
-            if (($now - $cached['updated']) < 1) {
-                $this->stats['cacheHits']++;
-                $this->stats['connections']++;
+        if ($this->cacheTTL > 0) {
+            $cached = $this->router->get($resourceId);
 
-                return new ConnectionResult(
-                    endpoint: $cached['endpoint'],
-                    protocol: $this->getProtocol(),
-                    metadata: ['cached' => true]
-                );
+            if ($cached !== false && \is_array($cached)) {
+                /** @var array{endpoint: string, updated: int} $cached */
+                if (($now - $cached['updated']) < $this->cacheTTL) {
+                    $this->stats['cacheHits']++;
+                    $this->stats['connections']++;
+
+                    return new ConnectionResult(
+                        endpoint: $cached['endpoint'],
+                        protocol: $this->getProtocol(),
+                        metadata: ['cached' => true]
+                    );
+                }
             }
         }
 
@@ -227,10 +240,12 @@ class Adapter
                 $this->validate($endpoint);
             }
 
-            $this->router->set($resourceId, [
-                'endpoint' => $endpoint,
-                'updated' => $now,
-            ]);
+            if ($this->cacheTTL > 0) {
+                $this->router->set($resourceId, [
+                    'endpoint' => $endpoint,
+                    'updated' => $now,
+                ]);
+            }
 
             $this->stats['connections']++;
 

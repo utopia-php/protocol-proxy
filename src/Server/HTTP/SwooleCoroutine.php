@@ -84,6 +84,7 @@ class SwooleCoroutine
     protected function initAdapter(): void
     {
         $this->adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
+        $this->adapter->setCacheTtl($this->config->cacheTTL);
 
         if ($this->config->skipValidation) {
             $this->adapter->setSkipValidation(true);
@@ -367,13 +368,22 @@ class SwooleCoroutine
         if (preg_match('/^HTTP\/\\d+\\.\\d+\\s+(\\d+)/', $lines[0], $matches)) {
             $statusCode = (int) $matches[1];
         }
-        foreach ($lines as $line) {
-            if (stripos($line, 'content-length:') === 0) {
-                $contentLength = (int) trim(substr($line, 15));
-                break;
+        $skipHeaders = ['connection', 'keep-alive', 'transfer-encoding', 'content-length'];
+        for ($i = 1; $i < count($lines); $i++) {
+            $colonPos = strpos($lines[$i], ':');
+            if ($colonPos === false) {
+                continue;
             }
-            if (stripos($line, 'transfer-encoding:') === 0 && stripos($line, 'chunked') !== false) {
+            $key = substr($lines[$i], 0, $colonPos);
+            $value = trim(substr($lines[$i], $colonPos + 1));
+            $lower = strtolower($key);
+            if ($lower === 'content-length') {
+                $contentLength = (int) $value;
+            } elseif ($lower === 'transfer-encoding' && stripos($value, 'chunked') !== false) {
                 $chunked = true;
+            }
+            if (!in_array($lower, $skipHeaders, true)) {
+                $response->header($key, $value);
             }
         }
 

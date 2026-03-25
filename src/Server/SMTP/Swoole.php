@@ -59,6 +59,7 @@ class Swoole
             'tcp_fastopen' => true,
             'open_cpu_affinity' => true,
             'open_length_check' => false,
+            'open_eof_check' => true,
             'package_eof' => "\r\n",
             'package_max_length' => 10 * 1024 * 1024,
             'task_enable_coroutine' => true,
@@ -85,6 +86,7 @@ class Swoole
             name: 'SMTP',
             protocol: Protocol::SMTP
         );
+        $this->adapter->setCacheTtl($this->config->cacheTTL);
 
         if ($this->config->skipValidation) {
             $this->adapter->setSkipValidation(true);

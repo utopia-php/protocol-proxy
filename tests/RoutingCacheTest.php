@@ -24,6 +24,7 @@ class RoutingCacheTest extends TestCase
         $this->resolver->setEndpoint('8.8.8.8:80');
         $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
+        $adapter->setCacheTTL(60);
 
         // Ensure we're at the start of a clean second
         $start = time();
@@ -44,6 +45,7 @@ class RoutingCacheTest extends TestCase
         $this->resolver->setEndpoint('8.8.8.8:80');
         $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
+        $adapter->setCacheTTL(60);
 
         $start = time();
         while (time() === $start) {
@@ -57,11 +59,12 @@ class RoutingCacheTest extends TestCase
         $this->assertTrue($second->metadata['cached']);
     }
 
-    public function testCacheExpiresAfterOneSecond(): void
+    public function testCacheExpiresAfterTtl(): void
     {
         $this->resolver->setEndpoint('8.8.8.8:80');
         $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
+        $adapter->setCacheTTL(1);
 
         $start = time();
         while (time() === $start) {
@@ -70,7 +73,6 @@ class RoutingCacheTest extends TestCase
 
         $adapter->route('resource-1');
 
-        // Wait for cache to expire
         sleep(1);
 
         $result = $adapter->route('resource-1');
@@ -85,6 +87,7 @@ class RoutingCacheTest extends TestCase
         $this->resolver->setEndpoint('8.8.8.8:80');
         $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
+        $adapter->setCacheTTL(60);
 
         $start = time();
         while (time() === $start) {
@@ -105,6 +108,7 @@ class RoutingCacheTest extends TestCase
         $this->resolver->setEndpoint('8.8.8.8:80');
         $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::SMTP);
         $adapter->setSkipValidation(true);
+        $adapter->setCacheTTL(60);
 
         $start = time();
         while (time() === $start) {
@@ -122,6 +126,7 @@ class RoutingCacheTest extends TestCase
         $this->resolver->setEndpoint('8.8.8.8:80');
         $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
+        $adapter->setCacheTTL(60);
 
         $start = time();
         while (time() === $start) {
@@ -171,6 +176,7 @@ class RoutingCacheTest extends TestCase
         $this->resolver->setEndpoint('8.8.8.8:80');
         $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
+        $adapter->setCacheTTL(60);
 
         $start = time();
         while (time() === $start) {

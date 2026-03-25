@@ -428,6 +428,7 @@ class EdgeIntegrationTest extends TestCase
 
         $adapter = new TCPAdapter(port: 5432, resolver: $resolver);
         $adapter->setSkipValidation(true);
+        $adapter->setCacheTTL(60);
 
         // Align to second boundary
         $start = time();

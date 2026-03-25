@@ -34,6 +34,9 @@ RUN composer install \
 
 COPY . .
 
+RUN addgroup -S app && adduser -S -G app app
+USER app
+
 EXPOSE 8080 8081 8025
 
 CMD ["php", "examples/http.php"]

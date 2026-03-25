@@ -25,6 +25,7 @@ class AdapterStatsTest extends TestCase
         $this->resolver->setEndpoint('127.0.0.1:8080');
         $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
+        $adapter->setCacheTTL(60);
 
         $start = time();
         while (time() === $start) {

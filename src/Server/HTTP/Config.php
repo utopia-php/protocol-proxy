@@ -44,6 +44,7 @@ class Config
         public readonly bool $rawBackend = false,
         public readonly bool $rawBackendAssumeOk = false,
         public readonly bool $skipValidation = false,
+        public readonly int $cacheTTL = 60,
         public readonly ?\Closure $requestHandler = null,
         public readonly ?\Closure $workerStart = null,
     ) {
