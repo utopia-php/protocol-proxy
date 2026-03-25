@@ -6,7 +6,7 @@ use Utopia\Proxy\Resolver;
 use Utopia\Proxy\Resolver\Result;
 use Utopia\Proxy\Server\TCP\Config as TCPConfig;
 use Utopia\Proxy\Server\TCP\Swoole as TCPServer;
-use Utopia\Proxy\Server\TCP\SwooleCoroutine as TCPCoroutineServer;
+use Utopia\Proxy\Server\TCP\Swoole\Coroutine as TCPCoroutineServer;
 use Utopia\Proxy\Server\TCP\TLS;
 
 /**

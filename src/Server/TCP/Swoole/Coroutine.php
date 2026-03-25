@@ -1,8 +1,8 @@
 <?php
 
-namespace Utopia\Proxy\Server\TCP;
+namespace Utopia\Proxy\Server\TCP\Swoole;
 
-use Swoole\Coroutine;
+use Swoole\Coroutine as SwooleCoroutine;
 use Swoole\Coroutine\Channel;
 use Swoole\Coroutine\Server as CoroutineServer;
 use Swoole\Coroutine\Server\Connection;
@@ -10,6 +10,9 @@ use Swoole\Coroutine\Socket;
 use Utopia\Console;
 use Utopia\Proxy\Adapter\TCP as TCPAdapter;
 use Utopia\Proxy\Resolver;
+use Utopia\Proxy\Server\TCP\Config;
+use Utopia\Proxy\Server\TCP\TLS;
+use Utopia\Proxy\Server\TCP\TLSContext;
 
 /**
  * High-performance TCP proxy server (Swoole Coroutine Implementation)
@@ -27,11 +30,11 @@ use Utopia\Proxy\Resolver;
  * ```php
  * $tls = new TLS(certificate: '/certs/server.crt', key: '/certs/server.key');
  * $config = new Config(ports: [5432, 3306], tls: $tls);
- * $server = new SwooleCoroutine($config, $resolver);
+ * $server = new Coroutine($config, $resolver);
  * $server->start();
  * ```
  */
-class SwooleCoroutine
+class Coroutine
 {
     /** @var array<int, CoroutineServer> */
     protected array $servers = [];
@@ -87,8 +90,7 @@ class SwooleCoroutine
 
     protected function configureServers(): void
     {
-        // Global coroutine settings
-        Coroutine::set([
+        SwooleCoroutine::set([
             'max_coroutine' => $this->config->maxCoroutine,
             'socket_buffer_size' => $this->config->socketBufferSize,
             'log_level' => $this->config->logLevel,
@@ -99,7 +101,6 @@ class SwooleCoroutine
         foreach ($this->config->ports as $port) {
             $server = new CoroutineServer($this->config->host, $port, $ssl, $this->config->enableReusePort);
 
-            // Only socket-protocol settings are applicable to Coroutine\Server
             $settings = [
                 'open_tcp_nodelay' => true,
                 'open_tcp_keepalive' => true,
@@ -111,14 +112,12 @@ class SwooleCoroutine
                 'buffer_output_size' => $this->config->bufferOutputSize,
             ];
 
-            // Apply TLS settings when enabled
             if ($this->tlsContext !== null) {
                 $settings = array_merge($settings, $this->tlsContext->toSwooleConfig());
             }
 
             $server->set($settings);
 
-            // Coroutine\Server::start() already spawns a coroutine per connection
             $server->handle(function (Connection $connection) use ($port): void {
                 $this->handleConnection($connection, $port);
             });
@@ -265,13 +264,13 @@ class SwooleCoroutine
             }
         };
 
-        if (Coroutine::getCid() > 0) {
+        if (SwooleCoroutine::getCid() > 0) {
             $runner();
 
             return;
         }
 
-        Coroutine\run($runner);
+        SwooleCoroutine\run($runner);
     }
 
     /**
@@ -285,7 +284,7 @@ class SwooleCoroutine
         }
 
         /** @var array<string, mixed> $coroutineStats */
-        $coroutineStats = Coroutine::stats();
+        $coroutineStats = SwooleCoroutine::stats();
 
         return [
             'connections' => 0,
