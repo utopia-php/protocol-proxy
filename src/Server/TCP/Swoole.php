@@ -2,6 +2,7 @@
 
 namespace Utopia\Proxy\Server\TCP;
 
+use Swoole\Constant;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Client;
 use Swoole\Coroutine\Socket;
@@ -138,11 +139,11 @@ class Swoole
 
         $this->server->set($settings);
 
-        $this->server->on('start', $this->onStart(...));
-        $this->server->on('workerStart', $this->onWorkerStart(...));
-        $this->server->on('connect', $this->onConnect(...));
-        $this->server->on('receive', $this->onReceive(...));
-        $this->server->on('close', $this->onClose(...));
+        $this->server->on(Constant::EVENT_START, $this->onStart(...));
+        $this->server->on(Constant::EVENT_WORKER_START, $this->onWorkerStart(...));
+        $this->server->on(Constant::EVENT_CONNECT, $this->onConnect(...));
+        $this->server->on(Constant::EVENT_RECEIVE, $this->onReceive(...));
+        $this->server->on(Constant::EVENT_CLOSE, $this->onClose(...));
     }
 
     public function onStart(Server $server): void

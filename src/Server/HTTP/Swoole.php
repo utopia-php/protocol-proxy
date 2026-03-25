@@ -2,6 +2,7 @@
 
 namespace Utopia\Proxy\Server\HTTP;
 
+use Swoole\Constant;
 use Swoole\Coroutine\Channel;
 use Swoole\Coroutine\Client as CoroutineClient;
 use Swoole\Coroutine\Http\Client as HttpClient;
@@ -76,9 +77,9 @@ class Swoole
             'task_enable_coroutine' => true,
         ]);
 
-        $this->server->on('start', $this->onStart(...));
-        $this->server->on('workerStart', $this->onWorkerStart(...));
-        $this->server->on('request', $this->onRequest(...));
+        $this->server->on(Constant::EVENT_START, $this->onStart(...));
+        $this->server->on(Constant::EVENT_WORKER_START, $this->onWorkerStart(...));
+        $this->server->on(Constant::EVENT_REQUEST, $this->onRequest(...));
     }
 
     public function onStart(Server $server): void
