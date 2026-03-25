@@ -104,7 +104,6 @@ class Swoole
     {
         $this->adapter = new Adapter(
             $this->resolver,
-            name: 'SMTP',
             protocol: Protocol::SMTP
         );
         $this->adapter->setCacheTTL($this->config->cacheTTL);
@@ -113,7 +112,7 @@ class Swoole
             $this->adapter->setSkipValidation(true);
         }
 
-        Console::log("Worker #{$workerId} started (Adapter: {$this->adapter->getName()})");
+        Console::log("Worker #{$workerId} started ({$this->adapter->getProtocol()->value})");
     }
 
     /**

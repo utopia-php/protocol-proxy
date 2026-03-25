@@ -27,7 +27,7 @@ class OnResolveCallbackTest extends TestCase
      */
     public function testOnResolveSetsCallback(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
 
         $result = $adapter->onResolve(function (string $resourceId) {
             return '1.2.3.4:8080';
@@ -43,7 +43,7 @@ class OnResolveCallbackTest extends TestCase
     {
         $this->resolver->setEndpoint('should-not-be-used.example.com:8080');
 
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
         $adapter->onResolve(function (string $resourceId): string {
             return 'callback-host.example.com:9090';
@@ -62,7 +62,7 @@ class OnResolveCallbackTest extends TestCase
     {
         $this->resolver->setEndpoint('resolver-host.example.com:8080');
 
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
 
         $result = $adapter->route('test-resource');
@@ -75,7 +75,7 @@ class OnResolveCallbackTest extends TestCase
      */
     public function testCallbackReturnsStringEndpoint(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
         $adapter->onResolve(function (string $resourceId): string {
             return 'string-endpoint.example.com:5432';
@@ -92,7 +92,7 @@ class OnResolveCallbackTest extends TestCase
      */
     public function testCallbackReturnsResultObject(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
         $adapter->onResolve(function (string $resourceId): ResolverResult {
             return new ResolverResult(
@@ -116,7 +116,7 @@ class OnResolveCallbackTest extends TestCase
     {
         $receivedIds = [];
 
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
         $adapter->onResolve(function (string $resourceId) use (&$receivedIds): string {
             $receivedIds[] = $resourceId;
@@ -140,7 +140,7 @@ class OnResolveCallbackTest extends TestCase
      */
     public function testRouteThrowsWhenNoCallbackOrResolver(): void
     {
-        $adapter = new Adapter(null, name: 'Test', protocol: Protocol::HTTP);
+        $adapter = new Adapter(null, protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
 
         $this->expectException(ResolverException::class);
@@ -171,7 +171,7 @@ class OnResolveCallbackTest extends TestCase
             }
         };
 
-        $adapter = new Adapter($mockResolver, name: 'Test', protocol: Protocol::HTTP);
+        $adapter = new Adapter($mockResolver, protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
         $adapter->onResolve(function (string $resourceId): string {
             return 'callback.example.com:8080';
@@ -188,7 +188,7 @@ class OnResolveCallbackTest extends TestCase
      */
     public function testStringCallbackResultHasDefaultMetadata(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
         $adapter->onResolve(function (string $resourceId): string {
             return 'host.example.com:8080';
@@ -205,7 +205,7 @@ class OnResolveCallbackTest extends TestCase
      */
     public function testResultObjectMetadataIsMerged(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
         $adapter->onResolve(function (string $resourceId): ResolverResult {
             return new ResolverResult(

@@ -22,7 +22,7 @@ class EndpointValidationTest extends TestCase
 
     private function createAdapter(): Adapter
     {
-        return new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
+        return new Adapter($this->resolver, protocol: Protocol::HTTP);
     }
 
     public function testRejectsEndpointWithMultipleColons(): void

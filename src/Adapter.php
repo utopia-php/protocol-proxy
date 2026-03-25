@@ -49,7 +49,6 @@ class Adapter
                 return $this->resolver;
             }
         },
-        protected string $name = 'Generic',
         protected Protocol $protocol = Protocol::TCP,
     ) {
         $this->initRouter();
@@ -158,14 +157,6 @@ class Adapter
         }
 
         $this->resolver?->track($resourceId, $metadata);
-    }
-
-    /**
-     * Get adapter name
-     */
-    public function getName(): string
-    {
-        return $this->name;
     }
 
     /**
@@ -365,7 +356,7 @@ class Adapter
         $totalRequests = $this->stats['cacheHits'] + $this->stats['cacheMisses'];
 
         return [
-            'adapter' => $this->getName(),
+            'adapter' => (new \ReflectionClass($this))->getShortName(),
             'protocol' => $this->getProtocol()->value,
             'connections' => $this->stats['connections'],
             'cacheHits' => $this->stats['cacheHits'],

@@ -82,7 +82,7 @@ class Swoole
 
     public function onWorkerStart(Server $server, int $workerId): void
     {
-        $this->adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
+        $this->adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
         $this->adapter->setCacheTTL($this->config->cacheTTL);
 
         if ($this->config->skipValidation) {
@@ -93,7 +93,7 @@ class Swoole
             ($this->config->workerStart)($server, $workerId, $this->adapter);
         }
 
-        Console::log("Worker #{$workerId} started (Adapter: {$this->adapter->getName()})");
+        Console::log("Worker #{$workerId} started ({$this->adapter->getProtocol()->value})");
     }
 
     public function start(): void

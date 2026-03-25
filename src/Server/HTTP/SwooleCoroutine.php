@@ -74,7 +74,7 @@ class SwooleCoroutine
 
     protected function initAdapter(): void
     {
-        $this->adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
+        $this->adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
         $this->adapter->setCacheTTL($this->config->cacheTTL);
 
         if ($this->config->skipValidation) {
@@ -95,7 +95,7 @@ class SwooleCoroutine
             ($this->config->workerStart)(null, $workerId, $this->adapter);
         }
 
-        Console::log("Worker #{$workerId} started (Adapter: {$this->adapter->getName()})");
+        Console::log("Worker #{$workerId} started ({$this->adapter->getProtocol()->value})");
     }
 
     public function start(): void

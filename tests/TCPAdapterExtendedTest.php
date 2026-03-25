@@ -49,12 +49,6 @@ class TCPAdapterExtendedTest extends TestCase
         $this->assertSame(5432, $adapter->port);
     }
 
-    public function testNameIsAlwaysTCP(): void
-    {
-        $adapter = new TCPAdapter(port: 5432, resolver: $this->resolver);
-        $this->assertSame('TCP', $adapter->getName());
-    }
-
     public function testSetTimeoutReturnsSelf(): void
     {
         $adapter = new TCPAdapter(port: 5432, resolver: $this->resolver);

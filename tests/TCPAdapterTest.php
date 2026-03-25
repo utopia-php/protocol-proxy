@@ -31,12 +31,6 @@ class TCPAdapterTest extends TestCase
         $this->assertSame(Protocol::MongoDB, $mongodb->getProtocol());
     }
 
-    public function testName(): void
-    {
-        $adapter = new TCPAdapter(port: 5432, resolver: $this->resolver);
-        $this->assertSame('TCP', $adapter->getName());
-    }
-
     public function testPort(): void
     {
         $adapter = new TCPAdapter(port: 3306, resolver: $this->resolver);

@@ -21,7 +21,7 @@ class AdapterByteTrackingTest extends TestCase
 
     public function testRecordBytesInitializesCounters(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::TCP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::TCP);
 
         $adapter->recordBytes('resource-1', inbound: 100, outbound: 200);
 
@@ -35,7 +35,7 @@ class AdapterByteTrackingTest extends TestCase
 
     public function testRecordBytesAccumulatesValues(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::TCP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::TCP);
 
         $adapter->recordBytes('resource-1', inbound: 100, outbound: 200);
         $adapter->recordBytes('resource-1', inbound: 50, outbound: 75);
@@ -50,7 +50,7 @@ class AdapterByteTrackingTest extends TestCase
 
     public function testRecordBytesDefaultsToZero(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::TCP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::TCP);
 
         $adapter->recordBytes('resource-1');
 
@@ -63,7 +63,7 @@ class AdapterByteTrackingTest extends TestCase
 
     public function testRecordBytesInboundOnly(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::TCP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::TCP);
 
         $adapter->recordBytes('resource-1', inbound: 500);
 
@@ -76,7 +76,7 @@ class AdapterByteTrackingTest extends TestCase
 
     public function testRecordBytesOutboundOnly(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::TCP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::TCP);
 
         $adapter->recordBytes('resource-1', outbound: 300);
 
@@ -89,7 +89,7 @@ class AdapterByteTrackingTest extends TestCase
 
     public function testRecordBytesTracksMultipleResources(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::TCP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::TCP);
 
         $adapter->recordBytes('resource-1', inbound: 100, outbound: 200);
         $adapter->recordBytes('resource-2', inbound: 300, outbound: 400);
@@ -106,7 +106,7 @@ class AdapterByteTrackingTest extends TestCase
 
     public function testNotifyCloseFlushesAndClearsCounters(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::TCP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::TCP);
 
         $adapter->recordBytes('resource-1', inbound: 100, outbound: 200);
         $adapter->notifyClose('resource-1');
@@ -121,7 +121,7 @@ class AdapterByteTrackingTest extends TestCase
 
     public function testNotifyCloseWithoutByteRecordingOmitsByteMetadata(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::TCP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::TCP);
 
         $adapter->notifyClose('resource-1', ['reason' => 'timeout']);
         $disconnects = $this->resolver->getDisconnects();
@@ -132,7 +132,7 @@ class AdapterByteTrackingTest extends TestCase
 
     public function testNotifyCloseMergesByteDataWithExistingMetadata(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::TCP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::TCP);
 
         $adapter->recordBytes('resource-1', inbound: 100, outbound: 200);
         $adapter->notifyClose('resource-1', ['reason' => 'client_disconnect']);
@@ -145,7 +145,7 @@ class AdapterByteTrackingTest extends TestCase
 
     public function testTrackFlushesAccumulatedBytes(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::TCP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::TCP);
         $adapter->setInterval(0);
 
         $adapter->recordBytes('resource-1', inbound: 100, outbound: 200);
@@ -159,7 +159,7 @@ class AdapterByteTrackingTest extends TestCase
 
     public function testTrackResetsCountersAfterFlush(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::TCP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::TCP);
         $adapter->setInterval(0);
 
         $adapter->recordBytes('resource-1', inbound: 100, outbound: 200);
@@ -181,7 +181,7 @@ class AdapterByteTrackingTest extends TestCase
 
     public function testTrackWithoutBytesOmitsByteMetadata(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::TCP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::TCP);
         $adapter->setInterval(0);
 
         $adapter->track('resource-1', ['type' => 'query']);
@@ -194,7 +194,7 @@ class AdapterByteTrackingTest extends TestCase
 
     public function testNotifyCloseClearsActivityTimestamp(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::TCP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::TCP);
         $adapter->setInterval(9999);
 
         // Track once to set the timestamp
@@ -215,7 +215,7 @@ class AdapterByteTrackingTest extends TestCase
 
     public function testSetActivityIntervalReturnsSelf(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::TCP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::TCP);
 
         $result = $adapter->setInterval(60);
         $this->assertSame($adapter, $result);
@@ -223,7 +223,7 @@ class AdapterByteTrackingTest extends TestCase
 
     public function testSetSkipValidationReturnsSelf(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::TCP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::TCP);
 
         $result = $adapter->setSkipValidation(true);
         $this->assertSame($adapter, $result);

@@ -22,17 +22,15 @@ class AdapterMetadataTest extends TestCase
 
     public function testHttpAdapterMetadata(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
 
-        $this->assertSame('HTTP', $adapter->getName());
         $this->assertSame(Protocol::HTTP, $adapter->getProtocol());
     }
 
     public function testSmtpAdapterMetadata(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'SMTP', protocol: Protocol::SMTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::SMTP);
 
-        $this->assertSame('SMTP', $adapter->getName());
         $this->assertSame(Protocol::SMTP, $adapter->getProtocol());
     }
 
@@ -40,7 +38,6 @@ class AdapterMetadataTest extends TestCase
     {
         $adapter = new TCPAdapter(port: 5432, resolver: $this->resolver);
 
-        $this->assertSame('TCP', $adapter->getName());
         $this->assertSame(Protocol::PostgreSQL, $adapter->getProtocol());
         $this->assertSame(5432, $adapter->port);
     }

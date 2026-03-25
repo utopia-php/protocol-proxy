@@ -57,14 +57,6 @@ class TCP extends Adapter
     }
 
     /**
-     * Get adapter name
-     */
-    public function getName(): string
-    {
-        return 'TCP';
-    }
-
-    /**
      * Get protocol type
      */
     public function getProtocol(): Protocol

@@ -22,7 +22,7 @@ class RoutingCacheTest extends TestCase
     public function testFirstCallIsCacheMiss(): void
     {
         $this->resolver->setEndpoint('8.8.8.8:80');
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
         $adapter->setCacheTTL(60);
 
@@ -43,7 +43,7 @@ class RoutingCacheTest extends TestCase
     public function testSecondCallWithinOneSecondIsCacheHit(): void
     {
         $this->resolver->setEndpoint('8.8.8.8:80');
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
         $adapter->setCacheTTL(60);
 
@@ -62,7 +62,7 @@ class RoutingCacheTest extends TestCase
     public function testCacheExpiresAfterTtl(): void
     {
         $this->resolver->setEndpoint('8.8.8.8:80');
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
         $adapter->setCacheTTL(1);
 
@@ -85,7 +85,7 @@ class RoutingCacheTest extends TestCase
     public function testMultipleResourcesCachedIndependently(): void
     {
         $this->resolver->setEndpoint('8.8.8.8:80');
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
         $adapter->setCacheTTL(60);
 
@@ -106,7 +106,7 @@ class RoutingCacheTest extends TestCase
     public function testCacheHitPreservesProtocol(): void
     {
         $this->resolver->setEndpoint('8.8.8.8:80');
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::SMTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::SMTP);
         $adapter->setSkipValidation(true);
         $adapter->setCacheTTL(60);
 
@@ -124,7 +124,7 @@ class RoutingCacheTest extends TestCase
     public function testCacheHitPreservesEndpoint(): void
     {
         $this->resolver->setEndpoint('8.8.8.8:80');
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
         $adapter->setCacheTTL(60);
 
@@ -141,7 +141,7 @@ class RoutingCacheTest extends TestCase
 
     public function testInitialStatsAreZero(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
 
         $stats = $adapter->getStats();
 
@@ -155,17 +155,17 @@ class RoutingCacheTest extends TestCase
 
     public function testStatsContainAdapterInfo(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'MyProxy', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
 
         $stats = $adapter->getStats();
 
-        $this->assertSame('MyProxy', $stats['adapter']);
+        $this->assertSame('Adapter', $stats['adapter']);
         $this->assertSame('http', $stats['protocol']);
     }
 
     public function testStatsRoutingTableMemoryIsPositive(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
 
         $stats = $adapter->getStats();
         $this->assertGreaterThan(0, $stats['routingTableMemory']);
@@ -174,7 +174,7 @@ class RoutingCacheTest extends TestCase
     public function testCacheHitRateCalculation(): void
     {
         $this->resolver->setEndpoint('8.8.8.8:80');
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
         $adapter->setCacheTTL(60);
 
@@ -196,7 +196,7 @@ class RoutingCacheTest extends TestCase
     public function testMultipleErrorsIncrementStats(): void
     {
         $this->resolver->setException(new \Utopia\Proxy\Resolver\Exception('fail'));
-        $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
 
         for ($i = 0; $i < 3; $i++) {
             try {

@@ -23,7 +23,7 @@ class AdapterStatsTest extends TestCase
     public function testCacheHitUpdatesStats(): void
     {
         $this->resolver->setEndpoint('127.0.0.1:8080');
-        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
         $adapter->setCacheTTL(60);
 
@@ -51,7 +51,7 @@ class AdapterStatsTest extends TestCase
     public function testRoutingErrorIncrementsStats(): void
     {
         $this->resolver->setException(new ResolverException('No backend'));
-        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
 
         try {
             $adapter->route('api.example.com');
@@ -70,7 +70,7 @@ class AdapterStatsTest extends TestCase
     public function testResolverStatsAreIncludedInAdapterStats(): void
     {
         $this->resolver->setEndpoint('127.0.0.1:8080');
-        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
 
         $adapter->route('api.example.com');

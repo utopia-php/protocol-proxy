@@ -23,9 +23,9 @@ class AdapterActionsTest extends TestCase
 
     public function testResolverIsAssignedToAdapters(): void
     {
-        $http = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
+        $http = new Adapter($this->resolver, protocol: Protocol::HTTP);
         $tcp = new TCPAdapter(port: 5432, resolver: $this->resolver);
-        $smtp = new Adapter($this->resolver, name: 'SMTP', protocol: Protocol::SMTP);
+        $smtp = new Adapter($this->resolver, protocol: Protocol::SMTP);
 
         $this->assertSame($this->resolver, $http->resolver);
         $this->assertSame($this->resolver, $tcp->resolver);
@@ -35,7 +35,7 @@ class AdapterActionsTest extends TestCase
     public function testResolveRoutesAndReturnsEndpoint(): void
     {
         $this->resolver->setEndpoint('127.0.0.1:8080');
-        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
 
         $result = $adapter->route('api.example.com');
@@ -46,7 +46,7 @@ class AdapterActionsTest extends TestCase
 
     public function testNotifyConnectDelegatesToResolver(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
 
         $adapter->notifyConnect('resource-123', ['extra' => 'data']);
 
@@ -58,7 +58,7 @@ class AdapterActionsTest extends TestCase
 
     public function testNotifyCloseDelegatesToResolver(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
 
         $adapter->notifyClose('resource-123', ['extra' => 'data']);
 
@@ -70,7 +70,7 @@ class AdapterActionsTest extends TestCase
 
     public function testTrackActivityDelegatesToResolverWithThrottling(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
         $adapter->setInterval(1); // 1 second throttle
 
         // First call should trigger activity tracking
@@ -92,7 +92,7 @@ class AdapterActionsTest extends TestCase
     public function testRoutingErrorThrowsException(): void
     {
         $this->resolver->setException(new ResolverException('No backend found'));
-        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
 
         $this->expectException(ResolverException::class);
         $this->expectExceptionMessage('No backend found');
@@ -103,7 +103,7 @@ class AdapterActionsTest extends TestCase
     public function testEmptyEndpointThrowsException(): void
     {
         $this->resolver->setEndpoint('');
-        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
 
         $this->expectException(ResolverException::class);
         $this->expectExceptionMessage('Resolver returned empty endpoint');
@@ -115,7 +115,7 @@ class AdapterActionsTest extends TestCase
     {
         // 10.0.0.1 is a private IP that would normally be blocked
         $this->resolver->setEndpoint('10.0.0.1:8080');
-        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
+        $adapter = new Adapter($this->resolver, protocol: Protocol::HTTP);
         $adapter->setSkipValidation(true);
 
         // Should not throw exception with validation disabled
