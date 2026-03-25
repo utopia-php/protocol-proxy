@@ -2,6 +2,8 @@
 
 namespace Utopia\Proxy\Server\TCP;
 
+use Utopia\Validator\Text;
+
 /**
  * TLS Configuration for TCP Proxy Server
  *
@@ -77,8 +79,18 @@ class TLS
      */
     public function validate(): void
     {
+        $path = new Text(4096);
+
+        if (!$path->isValid($this->certificate)) {
+            throw new \RuntimeException("TLS certificate path is invalid: {$path->getDescription()}");
+        }
+
         if (!is_readable($this->certificate)) {
             throw new \RuntimeException("TLS certificate file not readable: {$this->certificate}");
+        }
+
+        if (!$path->isValid($this->key)) {
+            throw new \RuntimeException("TLS key path is invalid: {$path->getDescription()}");
         }
 
         if (!is_readable($this->key)) {
@@ -87,6 +99,10 @@ class TLS
 
         if ($this->requireClientCert && $this->ca === '') {
             throw new \RuntimeException('CA certificate path is required when client certificate verification is enabled');
+        }
+
+        if ($this->ca !== '' && !$path->isValid($this->ca)) {
+            throw new \RuntimeException("TLS CA path is invalid: {$path->getDescription()}");
         }
 
         if ($this->ca !== '' && !is_readable($this->ca)) {

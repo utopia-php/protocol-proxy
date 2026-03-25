@@ -13,7 +13,8 @@
         "php": ">=8.4",
         "ext-redis": "*",
         "ext-swoole": ">=6.0",
-        "utopia-php/console": "^0.1.1"
+        "utopia-php/console": "^0.1.1",
+        "utopia-php/validators": "^0.2.0"
     },
     "require-dev": {
         "phpunit/phpunit": "12.*",

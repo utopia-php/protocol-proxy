@@ -4,6 +4,8 @@ namespace Utopia\Proxy;
 
 use Swoole\Table;
 use Utopia\Proxy\Resolver\Exception as ResolverException;
+use Utopia\Validator\IP;
+use Utopia\Validator\Range;
 
 /**
  * Protocol Proxy Adapter
@@ -277,16 +279,16 @@ class Adapter
         $hasPort = isset($parts[1]);
         $port = $hasPort ? (int) $parts[1] : 0;
 
-        if ($hasPort && ($port < 1 || $port > 65535)) {
+        if ($hasPort && !(new Range(1, 65535))->isValid($port)) {
             throw new ResolverException("Invalid port number: {$port}");
         }
 
         $ip = \gethostbyname($host);
-        if ($ip === $host && !\filter_var($ip, FILTER_VALIDATE_IP)) {
+        if ($ip === $host && !(new IP())->isValid($ip)) {
             throw new ResolverException("Cannot resolve hostname: {$host}");
         }
 
-        if (\filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+        if ((new IP(IP::V4))->isValid($ip)) {
             $longIp = \ip2long($ip);
             if ($longIp === false) {
                 throw new ResolverException("Invalid IP address: {$ip}");
@@ -310,7 +312,7 @@ class Adapter
                     throw new ResolverException("Access to private/reserved IP address is forbidden: {$ip}");
                 }
             }
-        } elseif (\filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+        } elseif ((new IP(IP::V6))->isValid($ip)) {
             if (
                 $ip === '::1'
                 || \str_starts_with($ip, 'fe80:')

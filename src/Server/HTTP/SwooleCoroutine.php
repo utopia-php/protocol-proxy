@@ -13,6 +13,7 @@ use Utopia\Console;
 use Utopia\Proxy\Adapter;
 use Utopia\Proxy\Protocol;
 use Utopia\Proxy\Resolver;
+use Utopia\Validator\Hostname;
 
 /**
  * High-performance HTTP proxy server (Swoole Coroutine Implementation)
@@ -470,11 +471,7 @@ class SwooleCoroutine
             return false;
         }
 
-        if (strlen($host) > 255 || preg_match('/[\x00-\x1f\x7f\s]/', $host)) {
-            return false;
-        }
-
-        return preg_match('/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/i', $host) === 1;
+        return (new Hostname())->isValid($host);
     }
 
     public function start(): void
