@@ -14,7 +14,7 @@ namespace Utopia\Proxy\Server\TCP;
  *
  * Example:
  * ```php
- * $tls = new TLS(certPath: '/certs/server.crt', keyPath: '/certs/server.key');
+ * $tls = new TLS(certificate: '/certs/server.crt', key: '/certs/server.key');
  * $ctx = new TlsContext($tls);
  *
  * // For Swoole Server::set()
@@ -42,15 +42,15 @@ class TlsContext
     public function toSwooleConfig(): array
     {
         $config = [
-            'ssl_cert_file' => $this->tls->certPath,
-            'ssl_key_file' => $this->tls->keyPath,
+            'ssl_cert_file' => $this->tls->certificate,
+            'ssl_key_file' => $this->tls->key,
             'ssl_protocols' => $this->tls->minProtocol,
             'ssl_ciphers' => $this->tls->ciphers,
             'ssl_allow_self_signed' => false,
         ];
 
-        if ($this->tls->caPath !== '') {
-            $config['ssl_client_cert_file'] = $this->tls->caPath;
+        if ($this->tls->ca !== '') {
+            $config['ssl_client_cert_file'] = $this->tls->ca;
         }
 
         if ($this->tls->requireClientCert) {
@@ -74,16 +74,16 @@ class TlsContext
     public function toStreamContext(): mixed
     {
         $sslOptions = [
-            'local_cert' => $this->tls->certPath,
-            'local_pk' => $this->tls->keyPath,
+            'local_cert' => $this->tls->certificate,
+            'local_pk' => $this->tls->key,
             'disable_compression' => true,
             'allow_self_signed' => false,
             'ciphers' => $this->tls->ciphers,
             'crypto_method' => STREAM_CRYPTO_METHOD_TLSv1_2_SERVER | STREAM_CRYPTO_METHOD_TLSv1_3_SERVER,
         ];
 
-        if ($this->tls->caPath !== '') {
-            $sslOptions['cafile'] = $this->tls->caPath;
+        if ($this->tls->ca !== '') {
+            $sslOptions['cafile'] = $this->tls->ca;
         }
 
         if ($this->tls->requireClientCert) {

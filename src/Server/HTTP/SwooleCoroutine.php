@@ -31,10 +31,10 @@ class SwooleCoroutine
     protected array $config;
 
     /** @var array<string, Channel> */
-    protected array $backendPools = [];
+    protected array $pools = [];
 
     /** @var array<string, Channel> */
-    protected array $rawBackendPools = [];
+    protected array $rawPools = [];
 
     /**
      * @param  array<string, mixed>  $config
@@ -253,10 +253,10 @@ class SwooleCoroutine
         $port = (int) $port;
 
         $poolKey = "{$host}:{$port}";
-        if (! isset($this->backendPools[$poolKey])) {
-            $this->backendPools[$poolKey] = new Channel($this->config['backend_pool_size']);
+        if (! isset($this->pools[$poolKey])) {
+            $this->pools[$poolKey] = new Channel($this->config['backend_pool_size']);
         }
-        $pool = $this->backendPools[$poolKey];
+        $pool = $this->pools[$poolKey];
 
         $isNewClient = false;
         $client = $pool->pop($this->config['backend_pool_timeout']);
@@ -403,10 +403,10 @@ class SwooleCoroutine
         $port = (int) $port;
 
         $poolKey = "{$host}:{$port}";
-        if (! isset($this->rawBackendPools[$poolKey])) {
-            $this->rawBackendPools[$poolKey] = new Channel($this->config['backend_pool_size']);
+        if (! isset($this->rawPools[$poolKey])) {
+            $this->rawPools[$poolKey] = new Channel($this->config['backend_pool_size']);
         }
-        $pool = $this->rawBackendPools[$poolKey];
+        $pool = $this->rawPools[$poolKey];
 
         $client = $pool->pop($this->config['backend_pool_timeout']);
         if (! $client instanceof CoroutineClient || ! $client->isConnected()) {

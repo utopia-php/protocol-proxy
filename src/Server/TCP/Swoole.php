@@ -24,7 +24,7 @@ use Utopia\Query\Type as QueryType;
  *
  * Example:
  * ```php
- * $tls = new TLS(certPath: '/certs/server.crt', keyPath: '/certs/server.key');
+ * $tls = new TLS(certificate: '/certs/server.crt', key: '/certs/server.key');
  * $config = new Config(host: '0.0.0.0', ports: [5432, 3306], tls: $tls);
  * $server = new Swoole($resolver, $config);
  * $server->start();
@@ -45,10 +45,10 @@ class Swoole
     protected array $forwarding = [];
 
     /** @var array<int, Client> Primary/default backend connections */
-    protected array $backendClients = [];
+    protected array $clients = [];
 
     /** @var array<int, Client> Read replica backend connections (when read/write split enabled) */
-    protected array $readBackendClients = [];
+    protected array $readClients = [];
 
     /** @var array<int, int> */
     protected array $clientPorts = [];
@@ -60,7 +60,7 @@ class Swoole
      *
      * @var array<int, bool>
      */
-    protected array $pendingTlsUpgrade = [];
+    protected array $pendingTls = [];
 
     protected ?Resolver $resolver;
 
@@ -88,7 +88,7 @@ class Swoole
 
         // Build Config from array or named params
         if (\is_array($config)) {
-            $this->config = self::buildConfigFromArray($config, $host, $ports, $workers);
+            $this->config = self::buildConfig($config, $host, $ports, $workers);
         } elseif ($config instanceof Config) {
             $this->config = $config;
         } else {
@@ -142,7 +142,7 @@ class Swoole
      *
      * @param  array<string, mixed>  $settings
      */
-    protected static function buildConfigFromArray(
+    protected static function buildConfig(
         array $settings,
         ?string $host = null,
         ?array $ports = null,
@@ -169,7 +169,7 @@ class Swoole
             logLevel: $settings['log_level'] ?? SWOOLE_LOG_ERROR,
             logConnections: $settings['log_connections'] ?? false,
             recvBufferSize: $settings['recv_buffer_size'] ?? 131072,
-            backendConnectTimeout: $settings['backend_connect_timeout'] ?? 5.0,
+            connectTimeout: $settings['backend_connect_timeout'] ?? 5.0,
             skipValidation: $settings['skip_validation'] ?? false,
             readWriteSplit: $settings['read_write_split'] ?? false,
             tls: $settings['tls'] ?? null,
@@ -233,7 +233,7 @@ class Swoole
 
         if ($this->config->isTlsEnabled()) {
             echo "TLS: enabled\n";
-            if ($this->config->tls?->isMutualTLS()) {
+            if ($this->config->tls?->isMutual()) {
                 echo "mTLS: enabled (client certificates required)\n";
             }
         }
@@ -253,7 +253,7 @@ class Swoole
                 $adapter->setSkipValidation(true);
             }
 
-            $adapter->setConnectTimeout($this->config->backendConnectTimeout);
+            $adapter->setTimeout($this->config->connectTimeout);
 
             if ($this->config->readWriteSplit) {
                 $adapter->setReadWriteSplit(true);
@@ -295,7 +295,7 @@ class Swoole
         $fdKey = (string) $fd;
 
         // Fast path: existing connection - forward to appropriate backend
-        if (isset($this->backendClients[$fd])) {
+        if (isset($this->clients[$fd])) {
             $port = $this->clientPorts[$fd] ?? 5432;
             $adapter = $this->adapters[$port] ?? null;
 
@@ -305,17 +305,17 @@ class Swoole
             }
 
             // When read/write split is active and we have a read backend, classify and route
-            if (isset($this->readBackendClients[$fd]) && $adapter !== null) {
-                $queryType = $adapter->classifyQuery($data, $fd);
+            if (isset($this->readClients[$fd]) && $adapter !== null) {
+                $queryType = $adapter->classify($data, $fd);
 
                 if ($queryType === QueryType::Read) {
-                    $this->readBackendClients[$fd]->send($data);
+                    $this->readClients[$fd]->send($data);
 
                     return;
                 }
             }
 
-            $this->backendClients[$fd]->send($data);
+            $this->clients[$fd]->send($data);
 
             return;
         }
@@ -325,14 +325,14 @@ class Swoole
             $port = $this->clientPorts[$fd] ?? null;
             if ($port !== null && $port === 5432) {
                 $server->send($fd, TLS::PG_SSL_RESPONSE_OK);
-                $this->pendingTlsUpgrade[$fd] = true;
+                $this->pendingTls[$fd] = true;
 
                 return;
             }
         }
 
-        if (isset($this->pendingTlsUpgrade[$fd])) {
-            unset($this->pendingTlsUpgrade[$fd]);
+        if (isset($this->pendingTls[$fd])) {
+            unset($this->pendingTls[$fd]);
         }
 
         // Slow path: new connection setup
@@ -356,8 +356,8 @@ class Swoole
 
             // Route via resolver — the resolver receives raw initial data
             // and is responsible for extracting any routing information
-            $backendClient = $adapter->getBackendConnection($data, $fd);
-            $this->backendClients[$fd] = $backendClient;
+            $backendClient = $adapter->getConnection($data, $fd);
+            $this->clients[$fd] = $backendClient;
 
             // If read/write split is enabled, establish read replica connection
             if ($adapter->isReadWriteSplit() && $this->resolver instanceof ReadWriteResolver) {
@@ -370,16 +370,16 @@ class Swoole
                     if ($readEndpoint !== $writeResult->endpoint) {
                         $readClient = new \Swoole\Coroutine\Client(SWOOLE_SOCK_TCP);
                         $readClient->set([
-                            'timeout' => $this->config->backendConnectTimeout,
-                            'connect_timeout' => $this->config->backendConnectTimeout,
+                            'timeout' => $this->config->connectTimeout,
+                            'connect_timeout' => $this->config->connectTimeout,
                             'open_tcp_nodelay' => true,
                             'socket_buffer_size' => 2 * 1024 * 1024,
                         ]);
 
-                        if ($readClient->connect($readHost, (int) $readPort, $this->config->backendConnectTimeout)) {
-                            $this->readBackendClients[$fd] = $readClient;
+                        if ($readClient->connect($readHost, (int) $readPort, $this->config->connectTimeout)) {
+                            $this->readClients[$fd] = $readClient;
                             $readClient->send($data);
-                            $this->startForwarding($server, $fd, $readClient);
+                            $this->forward($server, $fd, $readClient);
                         }
                     }
                 } catch (\Exception $e) {
@@ -396,7 +396,7 @@ class Swoole
 
             // Start bidirectional forwarding from primary
             $this->forwarding[$fd] = true;
-            $this->startForwarding($server, $fd, $backendClient);
+            $this->forward($server, $fd, $backendClient);
 
         } catch (\Exception $e) {
             echo "Error handling data from #{$fd}: {$e->getMessage()}\n";
@@ -409,7 +409,7 @@ class Swoole
      *
      * Performance: 10GB/s+ throughput
      */
-    protected function startForwarding(Server $server, int $clientFd, Client $backendClient): void
+    protected function forward(Server $server, int $clientFd, Client $backendClient): void
     {
         $bufferSize = $this->config->recvBufferSize;
         /** @var \Swoole\Coroutine\Socket $backendSocket */
@@ -440,14 +440,14 @@ class Swoole
             echo "Client #{$fd} disconnected\n";
         }
 
-        if (isset($this->backendClients[$fd])) {
-            $this->backendClients[$fd]->close();
-            unset($this->backendClients[$fd]);
+        if (isset($this->clients[$fd])) {
+            $this->clients[$fd]->close();
+            unset($this->clients[$fd]);
         }
 
-        if (isset($this->readBackendClients[$fd])) {
-            $this->readBackendClients[$fd]->close();
-            unset($this->readBackendClients[$fd]);
+        if (isset($this->readClients[$fd])) {
+            $this->readClients[$fd]->close();
+            unset($this->readClients[$fd]);
         }
 
         if (isset($this->clientPorts[$fd])) {
@@ -455,14 +455,14 @@ class Swoole
             $adapter = $this->adapters[$port] ?? null;
             if ($adapter) {
                 $adapter->notifyClose((string) $fd);
-                $adapter->closeBackendConnection($fd);
-                $adapter->clearConnectionState($fd);
+                $adapter->closeConnection($fd);
+                $adapter->clearState($fd);
             }
         }
 
         unset($this->forwarding[$fd]);
         unset($this->clientPorts[$fd]);
-        unset($this->pendingTlsUpgrade[$fd]);
+        unset($this->pendingTls[$fd]);
     }
 
     public function start(): void

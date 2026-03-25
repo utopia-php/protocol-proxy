@@ -39,16 +39,16 @@ use Utopia\Query\Type as QueryType;
 class TCP extends Adapter
 {
     /** @var array<int, Client> */
-    protected array $backendConnections = [];
+    protected array $connections = [];
 
     /** @var float Backend connection timeout in seconds */
-    protected float $connectTimeout = 5.0;
+    protected float $timeout = 5.0;
 
     /** @var bool Whether read/write split routing is enabled */
     protected bool $readWriteSplit = false;
 
     /** @var Parser|null Lazy-initialized query parser */
-    protected ?Parser $queryParser = null;
+    protected ?Parser $parser = null;
 
     /**
      * Per-connection transaction pinning state.
@@ -56,7 +56,7 @@ class TCP extends Adapter
      *
      * @var array<int, bool>
      */
-    protected array $pinnedConnections = [];
+    protected array $pinned = [];
 
     public function __construct(
         ?Resolver $resolver = null,
@@ -72,9 +72,9 @@ class TCP extends Adapter
     /**
      * Set backend connection timeout
      */
-    public function setConnectTimeout(float $timeout): static
+    public function setTimeout(float $timeout): static
     {
-        $this->connectTimeout = $timeout;
+        $this->timeout = $timeout;
 
         return $this;
     }
@@ -105,9 +105,9 @@ class TCP extends Adapter
     /**
      * Check if a connection is pinned to primary (in a transaction)
      */
-    public function isConnectionPinned(int $clientFd): bool
+    public function isPinned(int $clientFd): bool
     {
-        return $this->pinnedConnections[$clientFd] ?? false;
+        return $this->pinned[$clientFd] ?? false;
     }
 
     /**
@@ -149,29 +149,29 @@ class TCP extends Adapter
      * @param  int  $clientFd  Client file descriptor for transaction tracking
      * @return QueryType QueryType::Read or QueryType::Write
      */
-    public function classifyQuery(string $data, int $clientFd): QueryType
+    public function classify(string $data, int $clientFd): QueryType
     {
         if (!$this->readWriteSplit) {
             return QueryType::Write;
         }
 
         // If connection is pinned to primary (in transaction), everything goes to primary
-        if ($this->isConnectionPinned($clientFd)) {
-            $classification = $this->getQueryParser()->parse($data);
+        if ($this->isPinned($clientFd)) {
+            $classification = $this->getParser()->parse($data);
 
             // Transaction end unpins
             if ($classification === QueryType::TransactionEnd) {
-                unset($this->pinnedConnections[$clientFd]);
+                unset($this->pinned[$clientFd]);
             }
 
             return QueryType::Write;
         }
 
-        $classification = $this->getQueryParser()->parse($data);
+        $classification = $this->getParser()->parse($data);
 
         // Transaction begin pins to primary
         if ($classification === QueryType::TransactionBegin) {
-            $this->pinnedConnections[$clientFd] = true;
+            $this->pinned[$clientFd] = true;
 
             return QueryType::Write;
         }
@@ -215,9 +215,9 @@ class TCP extends Adapter
      *
      * Should be called when a client disconnects to clean up state.
      */
-    public function clearConnectionState(int $clientFd): void
+    public function clearState(int $clientFd): void
     {
-        unset($this->pinnedConnections[$clientFd]);
+        unset($this->pinned[$clientFd]);
     }
 
     /**
@@ -231,10 +231,10 @@ class TCP extends Adapter
      *
      * @throws \Exception
      */
-    public function getBackendConnection(string $initialData, int $clientFd): Client
+    public function getConnection(string $initialData, int $clientFd): Client
     {
-        if (isset($this->backendConnections[$clientFd])) {
-            return $this->backendConnections[$clientFd];
+        if (isset($this->connections[$clientFd])) {
+            return $this->connections[$clientFd];
         }
 
         $result = $this->route($initialData);
@@ -245,17 +245,17 @@ class TCP extends Adapter
         $client = new Client(SWOOLE_SOCK_TCP);
 
         $client->set([
-            'timeout' => $this->connectTimeout,
-            'connect_timeout' => $this->connectTimeout,
+            'timeout' => $this->timeout,
+            'connect_timeout' => $this->timeout,
             'open_tcp_nodelay' => true,
             'socket_buffer_size' => 2 * 1024 * 1024,
         ]);
 
-        if (!$client->connect($host, $port, $this->connectTimeout)) {
+        if (!$client->connect($host, $port, $this->timeout)) {
             throw new \Exception("Failed to connect to backend: {$host}:{$port}");
         }
 
-        $this->backendConnections[$clientFd] = $client;
+        $this->connections[$clientFd] = $client;
 
         return $client;
     }
@@ -263,21 +263,21 @@ class TCP extends Adapter
     /**
      * Close backend connection for a client
      */
-    public function closeBackendConnection(int $clientFd): void
+    public function closeConnection(int $clientFd): void
     {
-        if (isset($this->backendConnections[$clientFd])) {
-            $this->backendConnections[$clientFd]->close();
-            unset($this->backendConnections[$clientFd]);
+        if (isset($this->connections[$clientFd])) {
+            $this->connections[$clientFd]->close();
+            unset($this->connections[$clientFd]);
         }
     }
 
     /**
      * Get or create the query parser instance (lazy initialization)
      */
-    protected function getQueryParser(): Parser
+    protected function getParser(): Parser
     {
-        if ($this->queryParser === null) {
-            $this->queryParser = match ($this->getProtocol()) {
+        if ($this->parser === null) {
+            $this->parser = match ($this->getProtocol()) {
                 Protocol::PostgreSQL => new PostgreSQLParser(),
                 Protocol::MySQL => new MySQLParser(),
                 Protocol::MongoDB => new MongoDBParser(),
@@ -285,7 +285,7 @@ class TCP extends Adapter
             };
         }
 
-        return $this->queryParser;
+        return $this->parser;
     }
 
     /**
@@ -310,7 +310,7 @@ class TCP extends Adapter
             }
 
             if (!$this->skipValidation) {
-                $this->validateEndpoint($endpoint);
+                $this->validate($endpoint);
             }
 
             return new ConnectionResult(
@@ -346,7 +346,7 @@ class TCP extends Adapter
             }
 
             if (!$this->skipValidation) {
-                $this->validateEndpoint($endpoint);
+                $this->validate($endpoint);
             }
 
             return new ConnectionResult(

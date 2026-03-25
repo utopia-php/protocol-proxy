@@ -30,7 +30,7 @@ class Config
         public readonly int $logLevel = SWOOLE_LOG_ERROR,
         public readonly bool $logConnections = false,
         public readonly int $recvBufferSize = 131072,
-        public readonly float $backendConnectTimeout = 5.0,
+        public readonly float $connectTimeout = 5.0,
         public readonly bool $skipValidation = false,
         public readonly bool $readWriteSplit = false,
         public readonly ?TLS $tls = null,

@@ -15,9 +15,9 @@ namespace Utopia\Proxy\Server\TCP;
  * Example:
  * ```php
  * $tls = new TLS(
- *     certPath: '/certs/server.crt',
- *     keyPath: '/certs/server.key',
- *     caPath: '/certs/ca.crt',
+ *     certificate: '/certs/server.crt',
+ *     key: '/certs/server.key',
+ *     ca: '/certs/ca.crt',
  *     requireClientCert: true,
  * );
  * $config = new Config(tls: $tls);
@@ -61,9 +61,9 @@ class TLS
     public const MIN_TLS_VERSION = SWOOLE_SSL_TLSv1_2;
 
     public function __construct(
-        public readonly string $certPath,
-        public readonly string $keyPath,
-        public readonly string $caPath = '',
+        public readonly string $certificate,
+        public readonly string $key,
+        public readonly string $ca = '',
         public readonly bool $requireClientCert = false,
         public readonly string $ciphers = self::DEFAULT_CIPHERS,
         public readonly int $minProtocol = self::MIN_TLS_VERSION,
@@ -77,29 +77,29 @@ class TLS
      */
     public function validate(): void
     {
-        if (!is_readable($this->certPath)) {
-            throw new \RuntimeException("TLS certificate file not readable: {$this->certPath}");
+        if (!is_readable($this->certificate)) {
+            throw new \RuntimeException("TLS certificate file not readable: {$this->certificate}");
         }
 
-        if (!is_readable($this->keyPath)) {
-            throw new \RuntimeException("TLS private key file not readable: {$this->keyPath}");
+        if (!is_readable($this->key)) {
+            throw new \RuntimeException("TLS private key file not readable: {$this->key}");
         }
 
-        if ($this->requireClientCert && $this->caPath === '') {
+        if ($this->requireClientCert && $this->ca === '') {
             throw new \RuntimeException('CA certificate path is required when client certificate verification is enabled');
         }
 
-        if ($this->caPath !== '' && !is_readable($this->caPath)) {
-            throw new \RuntimeException("TLS CA certificate file not readable: {$this->caPath}");
+        if ($this->ca !== '' && !is_readable($this->ca)) {
+            throw new \RuntimeException("TLS CA certificate file not readable: {$this->ca}");
         }
     }
 
     /**
      * Check if this is an mTLS configuration (requires client certificates)
      */
-    public function isMutualTLS(): bool
+    public function isMutual(): bool
     {
-        return $this->requireClientCert && $this->caPath !== '';
+        return $this->requireClientCert && $this->ca !== '';
     }
 
     /**

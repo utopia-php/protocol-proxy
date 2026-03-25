@@ -27,16 +27,16 @@ class Adapter
     protected bool $skipValidation = false;
 
     /** @var int Activity tracking interval in seconds */
-    protected int $activityInterval = 30;
+    protected int $interval = 30;
 
     /** @var array<string, int> Last activity timestamp per resource */
-    protected array $lastActivityUpdate = [];
+    protected array $lastActivity = [];
 
     /** @var array<string, array{inbound: int, outbound: int}> Byte counters per resource since last flush */
-    protected array $byteCounters = [];
+    protected array $bytes = [];
 
     /** @var \Closure|null Custom resolve callback, checked before the resolver */
-    protected ?\Closure $resolveCallback = null;
+    protected ?\Closure $callback = null;
 
     public function __construct(
         public ?Resolver $resolver = null {
@@ -54,9 +54,9 @@ class Adapter
     /**
      * Set activity tracking interval
      */
-    public function setActivityInterval(int $seconds): static
+    public function setInterval(int $seconds): static
     {
-        $this->activityInterval = $seconds;
+        $this->interval = $seconds;
 
         return $this;
     }
@@ -68,7 +68,7 @@ class Adapter
      */
     public function onResolve(callable $callback): static
     {
-        $this->resolveCallback = $callback(...);
+        $this->callback = $callback(...);
 
         return $this;
     }
@@ -101,14 +101,14 @@ class Adapter
     public function notifyClose(string $resourceId, array $metadata = []): void
     {
         // Flush remaining bytes on disconnect
-        if (isset($this->byteCounters[$resourceId])) {
-            $metadata['inboundBytes'] = $this->byteCounters[$resourceId]['inbound'];
-            $metadata['outboundBytes'] = $this->byteCounters[$resourceId]['outbound'];
-            unset($this->byteCounters[$resourceId]);
+        if (isset($this->bytes[$resourceId])) {
+            $metadata['inboundBytes'] = $this->bytes[$resourceId]['inbound'];
+            $metadata['outboundBytes'] = $this->bytes[$resourceId]['outbound'];
+            unset($this->bytes[$resourceId]);
         }
 
         $this->resolver?->onDisconnect($resourceId, $metadata);
-        unset($this->lastActivityUpdate[$resourceId]);
+        unset($this->lastActivity[$resourceId]);
     }
 
     /**
@@ -119,12 +119,12 @@ class Adapter
         int $inbound = 0,
         int $outbound = 0,
     ): void {
-        if (!isset($this->byteCounters[$resourceId])) {
-            $this->byteCounters[$resourceId] = ['inbound' => 0, 'outbound' => 0];
+        if (!isset($this->bytes[$resourceId])) {
+            $this->bytes[$resourceId] = ['inbound' => 0, 'outbound' => 0];
         }
 
-        $this->byteCounters[$resourceId]['inbound'] += $inbound;
-        $this->byteCounters[$resourceId]['outbound'] += $outbound;
+        $this->bytes[$resourceId]['inbound'] += $inbound;
+        $this->bytes[$resourceId]['outbound'] += $outbound;
     }
 
     /**
@@ -133,19 +133,19 @@ class Adapter
     public function track(string $resourceId, array $metadata = []): void
     {
         $now = time();
-        $lastUpdate = $this->lastActivityUpdate[$resourceId] ?? 0;
+        $lastUpdate = $this->lastActivity[$resourceId] ?? 0;
 
-        if (($now - $lastUpdate) < $this->activityInterval) {
+        if (($now - $lastUpdate) < $this->interval) {
             return;
         }
 
-        $this->lastActivityUpdate[$resourceId] = $now;
+        $this->lastActivity[$resourceId] = $now;
 
         // Flush accumulated byte counters into the activity metadata
-        if (isset($this->byteCounters[$resourceId])) {
-            $metadata['inboundBytes'] = $this->byteCounters[$resourceId]['inbound'];
-            $metadata['outboundBytes'] = $this->byteCounters[$resourceId]['outbound'];
-            $this->byteCounters[$resourceId] = ['inbound' => 0, 'outbound' => 0];
+        if (isset($this->bytes[$resourceId])) {
+            $metadata['inboundBytes'] = $this->bytes[$resourceId]['inbound'];
+            $metadata['outboundBytes'] = $this->bytes[$resourceId]['outbound'];
+            $this->bytes[$resourceId] = ['inbound' => 0, 'outbound' => 0];
         }
 
         $this->resolver?->track($resourceId, $metadata);
@@ -205,8 +205,8 @@ class Adapter
         $this->stats['cacheMisses']++;
 
         try {
-            if ($this->resolveCallback !== null) {
-                $resolved = ($this->resolveCallback)($resourceId);
+            if ($this->callback !== null) {
+                $resolved = ($this->callback)($resourceId);
                 $result = $resolved instanceof Resolver\Result
                     ? $resolved
                     : new Resolver\Result(endpoint: (string) $resolved);
@@ -228,7 +228,7 @@ class Adapter
             }
 
             if (! $this->skipValidation) {
-                $this->validateEndpoint($endpoint);
+                $this->validate($endpoint);
             }
 
             $this->router->set($resourceId, [
@@ -252,7 +252,7 @@ class Adapter
     /**
      * Validate backend endpoint to prevent SSRF attacks
      */
-    protected function validateEndpoint(string $endpoint): void
+    protected function validate(string $endpoint): void
     {
         $parts = \explode(':', $endpoint);
         if (\count($parts) > 2) {

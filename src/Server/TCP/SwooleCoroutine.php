@@ -22,7 +22,7 @@ use Utopia\Proxy\Resolver;
  *
  * Example:
  * ```php
- * $tls = new TLS(certPath: '/certs/server.crt', keyPath: '/certs/server.key');
+ * $tls = new TLS(certificate: '/certs/server.crt', key: '/certs/server.key');
  * $config = new Config(host: '0.0.0.0', ports: [5432, 3306], tls: $tls);
  * $server = new SwooleCoroutine($resolver, $config);
  * $server->start();
@@ -66,7 +66,7 @@ class SwooleCoroutine
                 $adapter->setSkipValidation(true);
             }
 
-            $adapter->setConnectTimeout($this->config->backendConnectTimeout);
+            $adapter->setTimeout($this->config->connectTimeout);
 
             $this->adapters[$port] = $adapter;
         }
@@ -123,7 +123,7 @@ class SwooleCoroutine
 
         if ($this->config->isTlsEnabled()) {
             echo "TLS: enabled\n";
-            if ($this->config->tls?->isMutualTLS()) {
+            if ($this->config->tls?->isMutual()) {
                 echo "mTLS: enabled (client certificates required)\n";
             }
         }
@@ -177,7 +177,7 @@ class SwooleCoroutine
         $fdKey = (string) $clientId;
 
         try {
-            $backendClient = $adapter->getBackendConnection($data, $clientId);
+            $backendClient = $adapter->getConnection($data, $clientId);
             /** @var \Swoole\Coroutine\Socket $backendSocket */
             $backendSocket = $backendClient->exportSocket();
 
@@ -220,7 +220,7 @@ class SwooleCoroutine
 
         $adapter->notifyClose($fdKey);
         $backendSocket->close();
-        $adapter->closeBackendConnection($clientId);
+        $adapter->closeConnection($clientId);
 
         if ($this->config->logConnections) {
             echo "Client #{$clientId} disconnected\n";
