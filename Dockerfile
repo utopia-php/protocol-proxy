@@ -30,8 +30,7 @@ COPY composer.json ./
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 RUN composer install \
     --no-dev \
-    --optimize-autoloader \
-    --ignore-platform-reqs
+    --optimize-autoloader
 
 COPY . .
 

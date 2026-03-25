@@ -25,7 +25,7 @@ class TlsContextTest extends TestCase
         $this->assertSame('/certs/server.crt', $config['ssl_cert_file']);
         $this->assertSame('/certs/server.key', $config['ssl_key_file']);
         $this->assertSame(TLS::DEFAULT_CIPHERS, $config['ssl_ciphers']);
-        $this->assertSame(TLS::MIN_TLS_VERSION, $config['ssl_protocols']);
+        $this->assertSame(SWOOLE_SSL_TLSv1_2 | SWOOLE_SSL_TLSv1_3, $config['ssl_protocols']);
         $this->assertFalse($config['ssl_allow_self_signed']);
         $this->assertFalse($config['ssl_verify_peer']);
         $this->assertArrayNotHasKey('ssl_client_cert_file', $config);

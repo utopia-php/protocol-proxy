@@ -44,7 +44,7 @@ class TlsContext
         $config = [
             'ssl_cert_file' => $this->tls->certificate,
             'ssl_key_file' => $this->tls->key,
-            'ssl_protocols' => $this->tls->minProtocol,
+            'ssl_protocols' => $this->protocolMask($this->tls->minProtocol),
             'ssl_ciphers' => $this->tls->ciphers,
             'ssl_allow_self_signed' => false,
         ];
@@ -96,6 +96,27 @@ class TlsContext
         }
 
         return stream_context_create(['ssl' => $sslOptions]);
+    }
+
+    private function protocolMask(int $minimum): int
+    {
+        $protocols = [
+            SWOOLE_SSL_TLSv1 => 1,
+            SWOOLE_SSL_TLSv1_1 => 2,
+            SWOOLE_SSL_TLSv1_2 => 3,
+            SWOOLE_SSL_TLSv1_3 => 4,
+        ];
+
+        $minOrder = $protocols[$minimum] ?? 3;
+        $mask = 0;
+
+        foreach ($protocols as $constant => $order) {
+            if ($order >= $minOrder) {
+                $mask |= $constant;
+            }
+        }
+
+        return $mask;
     }
 
     /**

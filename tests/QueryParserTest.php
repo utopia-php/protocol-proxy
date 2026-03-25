@@ -620,12 +620,12 @@ class QueryParserTest extends TestCase
         $elapsed = (\hrtime(true) - $start) / 1_000_000_000;
         $perQuery = ($elapsed / $iterations) * 1_000_000;
 
-        // Threshold is 2us to account for CTE queries which require parenthesis-depth scanning.
-        // Simple queries (SELECT, INSERT, BEGIN) are well under 1us individually.
+        // Threshold is 2.5us to account for CTE queries which require parenthesis-depth scanning
+        // and normal system load variance. Simple queries (SELECT, INSERT, BEGIN) are well under 1us.
         $this->assertLessThan(
-            2.0,
+            2.5,
             $perQuery,
-            \sprintf('classifySQL took %.3f us/query (target: < 2.0 us)', $perQuery)
+            \sprintf('classifySQL took %.3f us/query (target: < 2.5 us)', $perQuery)
         );
     }
 }

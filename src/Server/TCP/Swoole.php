@@ -304,8 +304,6 @@ class Swoole
 
                         if ($readClient->connect($readHost, (int) $readPort, $this->config->connectTimeout)) {
                             $this->readClients[$fd] = $readClient;
-                            $readClient->send($data);
-                            $this->forward($server, $fd, $readClient);
                         }
                     }
                 } catch (\Exception $e) {

@@ -322,6 +322,10 @@ class Swoole
         $requestServer = $request->server ?? [];
         $method = strtoupper($requestServer['request_method'] ?? 'GET');
         $path = $requestServer['request_uri'] ?? '/';
+        $query = $requestServer['query_string'] ?? '';
+        if ($query !== '') {
+            $path .= '?' . $query;
+        }
         $body = '';
         if ($method !== 'GET' && $method !== 'HEAD') {
             $body = $request->getContent() ?: '';
@@ -445,6 +449,10 @@ class Swoole
         }
 
         $path = $requestServer['request_uri'] ?? '/';
+        $query = $requestServer['query_string'] ?? '';
+        if ($query !== '') {
+            $path .= '?' . $query;
+        }
         $hostHeader = $port === 80 ? $host : "{$host}:{$port}";
         $requestLine = $method.' '.$path." HTTP/1.1\r\n".
             'Host: '.$hostHeader."\r\n".

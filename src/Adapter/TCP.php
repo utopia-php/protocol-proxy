@@ -237,7 +237,9 @@ class TCP extends Adapter
             return $this->connections[$clientFd];
         }
 
-        $result = $this->route($initialData);
+        $result = $this->readWriteSplit && $this->resolver instanceof ReadWriteResolver
+            ? $this->routeWrite($initialData)
+            : $this->route($initialData);
 
         [$host, $port] = \explode(':', $result->endpoint.':'.$this->port);
         $port = (int) $port;
