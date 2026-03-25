@@ -10,8 +10,8 @@ class Config
      * @param  array<int, int>  $ports
      */
     public function __construct(
+        public readonly array $ports,
         public readonly string $host = '0.0.0.0',
-        public readonly array $ports = [5432, 3306, 27017],
         public readonly int $workers = 16,
         public readonly int $maxConnections = 200_000,
         public readonly int $maxCoroutine = 200_000,
@@ -29,7 +29,8 @@ class Config
         public readonly int $maxWaitTime = 60,
         public readonly int $logLevel = SWOOLE_LOG_ERROR,
         public readonly bool $logConnections = false,
-        public readonly int $recvBufferSize = 131072,
+        public readonly int $receiveBufferSize = 131072,
+        public readonly float $timeout = 30.0,
         public readonly float $connectTimeout = 5.0,
         public readonly bool $skipValidation = false,
         public readonly ?TLS $tls = null,

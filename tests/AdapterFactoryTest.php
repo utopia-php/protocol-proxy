@@ -16,7 +16,7 @@ class AdapterFactoryTest extends TestCase
 
     public function testDefaultAdapterFactoryIsNull(): void
     {
-        $config = new Config();
+        $config = new Config(ports: [5432]);
         $this->assertNull($config->adapterFactory);
     }
 
@@ -26,7 +26,7 @@ class AdapterFactoryTest extends TestCase
             return 'adapter-for-port-' . $port;
         };
 
-        $config = new Config(adapterFactory: $factory);
+        $config = new Config(ports: [5432], adapterFactory: $factory);
         $this->assertNotNull($config->adapterFactory);
         $this->assertInstanceOf(\Closure::class, $config->adapterFactory);
     }
@@ -37,7 +37,7 @@ class AdapterFactoryTest extends TestCase
             return 'adapter-for-port-' . $port;
         };
 
-        $config = new Config(adapterFactory: $factory);
+        $config = new Config(ports: [5432], adapterFactory: $factory);
         $callable = $config->adapterFactory;
         \assert($callable !== null);
         $result = $callable(5432);
@@ -52,7 +52,7 @@ class AdapterFactoryTest extends TestCase
             return 'adapter';
         };
 
-        $config = new Config(adapterFactory: $factory);
+        $config = new Config(ports: [5432], adapterFactory: $factory);
         $callable = $config->adapterFactory;
         \assert($callable !== null);
         $callable(5432);
@@ -83,9 +83,9 @@ class AdapterFactoryTest extends TestCase
 
     public function testNullAdapterFactoryPreservesDefaults(): void
     {
-        $config = new Config(adapterFactory: null);
+        $config = new Config(ports: [5432], adapterFactory: null);
         $this->assertNull($config->adapterFactory);
         $this->assertSame('0.0.0.0', $config->host);
-        $this->assertSame([5432, 3306, 27017], $config->ports);
+        $this->assertSame([5432], $config->ports);
     }
 }

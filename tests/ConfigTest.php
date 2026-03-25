@@ -18,74 +18,74 @@ class ConfigTest extends TestCase
 
     public function testDefaultHost(): void
     {
-        $config = new Config();
+        $config = new Config(ports: [5432]);
         $this->assertSame('0.0.0.0', $config->host);
     }
 
-    public function testDefaultPorts(): void
+    public function testPortsAreRequired(): void
     {
-        $config = new Config();
-        $this->assertSame([5432, 3306, 27017], $config->ports);
+        $config = new Config(ports: [5432, 3306]);
+        $this->assertSame([5432, 3306], $config->ports);
     }
 
     public function testDefaultWorkers(): void
     {
-        $config = new Config();
+        $config = new Config(ports: [5432]);
         $this->assertSame(16, $config->workers);
     }
 
     public function testDefaultMaxConnections(): void
     {
-        $config = new Config();
+        $config = new Config(ports: [5432]);
         $this->assertSame(200_000, $config->maxConnections);
     }
 
     public function testDefaultMaxCoroutine(): void
     {
-        $config = new Config();
+        $config = new Config(ports: [5432]);
         $this->assertSame(200_000, $config->maxCoroutine);
     }
 
     public function testDefaultBufferSizes(): void
     {
-        $config = new Config();
+        $config = new Config(ports: [5432]);
         $this->assertSame(16 * 1024 * 1024, $config->socketBufferSize);
         $this->assertSame(16 * 1024 * 1024, $config->bufferOutputSize);
     }
 
     public function testDefaultReactorNumIsCpuBased(): void
     {
-        $config = new Config();
+        $config = new Config(ports: [5432]);
         $this->assertSame(swoole_cpu_num() * 2, $config->reactorNum);
     }
 
     public function testDefaultDispatchMode(): void
     {
-        $config = new Config();
+        $config = new Config(ports: [5432]);
         $this->assertSame(2, $config->dispatchMode);
     }
 
     public function testDefaultEnableReusePort(): void
     {
-        $config = new Config();
+        $config = new Config(ports: [5432]);
         $this->assertTrue($config->enableReusePort);
     }
 
     public function testDefaultBacklog(): void
     {
-        $config = new Config();
+        $config = new Config(ports: [5432]);
         $this->assertSame(65535, $config->backlog);
     }
 
     public function testDefaultPackageMaxLength(): void
     {
-        $config = new Config();
+        $config = new Config(ports: [5432]);
         $this->assertSame(32 * 1024 * 1024, $config->packageMaxLength);
     }
 
     public function testDefaultTcpKeepaliveSettings(): void
     {
-        $config = new Config();
+        $config = new Config(ports: [5432]);
         $this->assertSame(30, $config->tcpKeepidle);
         $this->assertSame(10, $config->tcpKeepinterval);
         $this->assertSame(3, $config->tcpKeepcount);
@@ -93,55 +93,55 @@ class ConfigTest extends TestCase
 
     public function testDefaultEnableCoroutine(): void
     {
-        $config = new Config();
+        $config = new Config(ports: [5432]);
         $this->assertTrue($config->enableCoroutine);
     }
 
     public function testDefaultMaxWaitTime(): void
     {
-        $config = new Config();
+        $config = new Config(ports: [5432]);
         $this->assertSame(60, $config->maxWaitTime);
     }
 
     public function testDefaultLogLevel(): void
     {
-        $config = new Config();
+        $config = new Config(ports: [5432]);
         $this->assertSame(SWOOLE_LOG_ERROR, $config->logLevel);
     }
 
     public function testDefaultLogConnections(): void
     {
-        $config = new Config();
+        $config = new Config(ports: [5432]);
         $this->assertFalse($config->logConnections);
     }
 
-    public function testDefaultRecvBufferSize(): void
+    public function testDefaultReceiveBufferSize(): void
     {
-        $config = new Config();
-        $this->assertSame(131072, $config->recvBufferSize);
+        $config = new Config(ports: [5432]);
+        $this->assertSame(131072, $config->receiveBufferSize);
     }
 
     public function testDefaultBackendConnectTimeout(): void
     {
-        $config = new Config();
+        $config = new Config(ports: [5432]);
         $this->assertSame(5.0, $config->connectTimeout);
     }
 
     public function testDefaultSkipValidation(): void
     {
-        $config = new Config();
+        $config = new Config(ports: [5432]);
         $this->assertFalse($config->skipValidation);
     }
 
     public function testDefaultTlsIsNull(): void
     {
-        $config = new Config();
+        $config = new Config(ports: [5432]);
         $this->assertNull($config->tls);
     }
 
     public function testCustomReactorNum(): void
     {
-        $config = new Config(reactorNum: 4);
+        $config = new Config(ports: [5432], reactorNum: 4);
         $this->assertSame(4, $config->reactorNum);
     }
 
@@ -153,70 +153,70 @@ class ConfigTest extends TestCase
 
     public function testCustomHost(): void
     {
-        $config = new Config(host: '127.0.0.1');
+        $config = new Config(ports: [5432], host: '127.0.0.1');
         $this->assertSame('127.0.0.1', $config->host);
     }
 
     public function testCustomWorkers(): void
     {
-        $config = new Config(workers: 4);
+        $config = new Config(ports: [5432], workers: 4);
         $this->assertSame(4, $config->workers);
     }
 
     public function testCustomBackendConnectTimeout(): void
     {
-        $config = new Config(connectTimeout: 10.5);
+        $config = new Config(ports: [5432], connectTimeout: 10.5);
         $this->assertSame(10.5, $config->connectTimeout);
     }
 
     public function testCustomSkipValidation(): void
     {
-        $config = new Config(skipValidation: true);
+        $config = new Config(ports: [5432], skipValidation: true);
         $this->assertTrue($config->skipValidation);
     }
 
     public function testCustomLogConnections(): void
     {
-        $config = new Config(logConnections: true);
+        $config = new Config(ports: [5432], logConnections: true);
         $this->assertTrue($config->logConnections);
     }
 
     public function testIsTlsEnabledFalseByDefault(): void
     {
-        $config = new Config();
+        $config = new Config(ports: [5432]);
         $this->assertFalse($config->isTlsEnabled());
     }
 
     public function testIsTlsEnabledTrueWhenConfigured(): void
     {
         $tls = new TLS(certificate: '/certs/server.crt', key: '/certs/server.key');
-        $config = new Config(tls: $tls);
+        $config = new Config(ports: [5432], tls: $tls);
         $this->assertTrue($config->isTlsEnabled());
     }
 
     public function testGetTlsContextNullByDefault(): void
     {
-        $config = new Config();
+        $config = new Config(ports: [5432]);
         $this->assertNull($config->getTlsContext());
     }
 
     public function testGetTlsContextReturnsInstanceWhenConfigured(): void
     {
         $tls = new TLS(certificate: '/certs/server.crt', key: '/certs/server.key');
-        $config = new Config(tls: $tls);
+        $config = new Config(ports: [5432], tls: $tls);
 
-        $ctx = $config->getTlsContext();
-        $this->assertInstanceOf(TlsContext::class, $ctx);
-        $this->assertSame($tls, $ctx->getTls());
+        $context = $config->getTlsContext();
+        $this->assertInstanceOf(TlsContext::class, $context);
+        $this->assertSame($tls, $context->getTls());
     }
 
     public function testGetTlsContextReturnsNewInstanceEachCall(): void
     {
         $tls = new TLS(certificate: '/certs/server.crt', key: '/certs/server.key');
-        $config = new Config(tls: $tls);
+        $config = new Config(ports: [5432], tls: $tls);
 
-        $ctx1 = $config->getTlsContext();
-        $ctx2 = $config->getTlsContext();
-        $this->assertNotSame($ctx1, $ctx2);
+        $context1 = $config->getTlsContext();
+        $context2 = $config->getTlsContext();
+        $this->assertNotSame($context1, $context2);
     }
 }

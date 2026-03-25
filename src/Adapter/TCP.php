@@ -30,26 +30,31 @@ class TCP extends Adapter
     /** @var array<int, Client> */
     protected array $connections = [];
 
-    /** @var float Backend connection timeout in seconds */
-    protected float $timeout = 5.0;
+    protected float $timeout = 30.0;
+
+    protected float $connectTimeout = 5.0;
 
     public function __construct(
-        ?Resolver $resolver = null,
-        public int $port = 5432 {
+        public int $port {
             get {
                 return $this->port;
             }
-        }
+        },
+        ?Resolver $resolver = null,
     ) {
         parent::__construct($resolver);
     }
 
-    /**
-     * Set backend connection timeout
-     */
     public function setTimeout(float $timeout): static
     {
         $this->timeout = $timeout;
+
+        return $this;
+    }
+
+    public function setConnectTimeout(float $timeout): static
+    {
+        $this->connectTimeout = $timeout;
 
         return $this;
     }
@@ -69,18 +74,32 @@ class TCP extends Adapter
     {
         return match ($this->port) {
             5432 => Protocol::PostgreSQL,
-            27017 => Protocol::MongoDB,
             3306 => Protocol::MySQL,
-            default => throw new \Exception('Unsupported protocol on port: ' . $this->port),
+            27017 => Protocol::MongoDB,
+            6379 => Protocol::Redis,
+            11211 => Protocol::Memcached,
+            9092 => Protocol::Kafka,
+            5672 => Protocol::AMQP,
+            9000 => Protocol::ClickHouse,
+            9042 => Protocol::Cassandra,
+            4222 => Protocol::NATS,
+            1433 => Protocol::MSSQL,
+            1521 => Protocol::Oracle,
+            9200 => Protocol::Elasticsearch,
+            1883 => Protocol::MQTT,
+            50051 => Protocol::GRPC,
+            2181 => Protocol::ZooKeeper,
+            2379 => Protocol::Etcd,
+            7687 => Protocol::Neo4j,
+            11210 => Protocol::Couchbase,
+            26257 => Protocol::CockroachDB,
+            4000 => Protocol::TiDB,
+            6650 => Protocol::Pulsar,
+            21 => Protocol::FTP,
+            389 => Protocol::LDAP,
+            28015 => Protocol::RethinkDB,
+            default => Protocol::TCP,
         };
-    }
-
-    /**
-     * Get adapter description
-     */
-    public function getDescription(): string
-    {
-        return 'TCP proxy adapter';
     }
 
     /**
@@ -89,36 +108,33 @@ class TCP extends Adapter
      * On first call for a given fd, routes via the resolver and establishes the
      * backend connection. Subsequent calls return the cached connection.
      *
-     * @param  string  $initialData  Raw initial packet data (used for routing on first call only)
-     * @param  int  $clientFd  Client file descriptor
-     *
      * @throws \Exception
      */
-    public function getConnection(string $initialData, int $clientFd): Client
+    public function getConnection(string $data, int $fd): Client
     {
-        if (isset($this->connections[$clientFd])) {
-            return $this->connections[$clientFd];
+        if (isset($this->connections[$fd])) {
+            return $this->connections[$fd];
         }
 
-        $result = $this->route($initialData);
+        $result = $this->route($data);
 
-        [$host, $port] = \explode(':', $result->endpoint.':'.$this->port);
+        [$host, $port] = \explode(':', $result->endpoint . ':' . $this->port);
         $port = (int) $port;
 
         $client = new Client(SWOOLE_SOCK_TCP);
 
         $client->set([
             'timeout' => $this->timeout,
-            'connect_timeout' => $this->timeout,
+            'connect_timeout' => $this->connectTimeout,
             'open_tcp_nodelay' => true,
             'socket_buffer_size' => 2 * 1024 * 1024,
         ]);
 
-        if (!$client->connect($host, $port, $this->timeout)) {
+        if (!$client->connect($host, $port, $this->connectTimeout)) {
             throw new \Exception("Failed to connect to backend: {$host}:{$port}");
         }
 
-        $this->connections[$clientFd] = $client;
+        $this->connections[$fd] = $client;
 
         return $client;
     }
@@ -126,11 +142,11 @@ class TCP extends Adapter
     /**
      * Close backend connection for a client
      */
-    public function closeConnection(int $clientFd): void
+    public function closeConnection(int $fd): void
     {
-        if (isset($this->connections[$clientFd])) {
-            $this->connections[$clientFd]->close();
-            unset($this->connections[$clientFd]);
+        if (isset($this->connections[$fd])) {
+            $this->connections[$fd]->close();
+            unset($this->connections[$fd]);
         }
     }
 

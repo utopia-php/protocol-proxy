@@ -24,7 +24,7 @@ class AdapterActionsTest extends TestCase
     public function testResolverIsAssignedToAdapters(): void
     {
         $http = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
-        $tcp = new TCPAdapter($this->resolver, port: 5432);
+        $tcp = new TCPAdapter(port: 5432, resolver: $this->resolver);
         $smtp = new Adapter($this->resolver, name: 'SMTP', protocol: Protocol::SMTP);
 
         $this->assertSame($this->resolver, $http->resolver);

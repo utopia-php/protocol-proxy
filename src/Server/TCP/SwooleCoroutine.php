@@ -23,8 +23,8 @@ use Utopia\Proxy\Resolver;
  * Example:
  * ```php
  * $tls = new TLS(certificate: '/certs/server.crt', key: '/certs/server.key');
- * $config = new Config(host: '0.0.0.0', ports: [5432, 3306], tls: $tls);
- * $server = new SwooleCoroutine($resolver, $config);
+ * $config = new Config(ports: [5432, 3306], tls: $tls);
+ * $server = new SwooleCoroutine($config, $resolver);
  * $server->start();
  * ```
  */
@@ -41,10 +41,10 @@ class SwooleCoroutine
     protected ?TlsContext $tlsContext = null;
 
     public function __construct(
+        Config $config,
         protected Resolver $resolver,
-        ?Config $config = null,
     ) {
-        $this->config = $config ?? new Config();
+        $this->config = $config;
 
         if ($this->config->isTlsEnabled()) {
             /** @var TLS $tls */
@@ -60,13 +60,14 @@ class SwooleCoroutine
     protected function initAdapters(): void
     {
         foreach ($this->config->ports as $port) {
-            $adapter = new TCPAdapter($this->resolver, port: $port);
+            $adapter = new TCPAdapter(port: $port, resolver: $this->resolver);
 
             if ($this->config->skipValidation) {
                 $adapter->setSkipValidation(true);
             }
 
-            $adapter->setTimeout($this->config->connectTimeout);
+            $adapter->setTimeout($this->config->timeout);
+            $adapter->setConnectTimeout($this->config->connectTimeout);
 
             $this->adapters[$port] = $adapter;
         }
@@ -140,7 +141,7 @@ class SwooleCoroutine
         $clientSocket = $connection->exportSocket();
         $clientId = spl_object_id($connection);
         $adapter = $this->adapters[$port];
-        $bufferSize = $this->config->recvBufferSize;
+        $bufferSize = $this->config->receiveBufferSize;
 
         if ($this->config->logConnections) {
             echo "Client #{$clientId} connected to port {$port}\n";

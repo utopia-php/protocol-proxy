@@ -14,6 +14,8 @@ class Config
         public readonly int $bufferOutputSize = 2 * 1024 * 1024,
         public readonly bool $enableCoroutine = true,
         public readonly int $maxWaitTime = 60,
+        public readonly int $timeout = 30,
+        public readonly float $connectTimeout = 5.0,
         public readonly bool $skipValidation = false,
     ) {
     }

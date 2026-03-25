@@ -32,11 +32,8 @@ class SwooleCoroutine
     /** @var array<string, Channel> */
     protected array $pools = [];
 
-    /** @var array<string, Channel> */
-    protected array $rawPools = [];
-
     public function __construct(
-        protected Resolver $resolver,
+        protected ?Resolver $resolver = null,
         ?Config $config = null,
     ) {
         $this->config = $config ?? new Config();
@@ -311,11 +308,11 @@ class SwooleCoroutine
         [$host, $port] = explode(':', $endpoint . ':80');
         $port = (int) $port;
 
-        $poolKey = "{$host}:{$port}";
-        if (!isset($this->rawPools[$poolKey])) {
-            $this->rawPools[$poolKey] = new Channel($this->config->poolSize);
+        $poolKey = "raw:{$host}:{$port}";
+        if (!isset($this->pools[$poolKey])) {
+            $this->pools[$poolKey] = new Channel($this->config->poolSize);
         }
-        $pool = $this->rawPools[$poolKey];
+        $pool = $this->pools[$poolKey];
 
         $client = $pool->pop($this->config->poolTimeout);
         if (!$client instanceof CoroutineClient || !$client->isConnected()) {
@@ -323,7 +320,7 @@ class SwooleCoroutine
             $client->set([
                 'timeout' => $this->config->timeout,
             ]);
-            if (!$client->connect($host, $port, $this->config->timeout)) {
+            if (!$client->connect($host, $port, $this->config->connectTimeout)) {
                 $response->status(502);
                 $response->end('Bad Gateway');
 

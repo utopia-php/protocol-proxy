@@ -42,7 +42,7 @@ class EdgeIntegrationTest extends TestCase
             'password' => 'secret_password',
         ]);
 
-        $adapter = new TCPAdapter($resolver, port: 5432);
+        $adapter = new TCPAdapter(port: 5432, resolver: $resolver);
         $adapter->setSkipValidation(true);
 
         $result = $adapter->route('abc123');
@@ -62,7 +62,7 @@ class EdgeIntegrationTest extends TestCase
     {
         $resolver = new EdgeMockResolver();
 
-        $adapter = new TCPAdapter($resolver, port: 5432);
+        $adapter = new TCPAdapter(port: 5432, resolver: $resolver);
         $adapter->setSkipValidation(true);
 
         $this->expectException(ResolverException::class);
@@ -84,7 +84,7 @@ class EdgeIntegrationTest extends TestCase
             'password' => 'pass1',
         ]);
 
-        $adapter = new TCPAdapter($resolver, port: 5432);
+        $adapter = new TCPAdapter(port: 5432, resolver: $resolver);
         $adapter->setSkipValidation(true);
 
         // The resolver receives the raw data directly and routes based on it
@@ -110,7 +110,7 @@ class EdgeIntegrationTest extends TestCase
 
         $failoverResolver = new EdgeFailoverResolver($primaryResolver, $secondaryResolver);
 
-        $adapter = new TCPAdapter($failoverResolver, port: 5432);
+        $adapter = new TCPAdapter(port: 5432, resolver: $failoverResolver);
         $adapter->setSkipValidation(true);
 
         $result = $adapter->route('faildb');
@@ -142,7 +142,7 @@ class EdgeIntegrationTest extends TestCase
 
         $failoverResolver = new EdgeFailoverResolver($primaryResolver, $secondaryResolver);
 
-        $adapter = new TCPAdapter($failoverResolver, port: 5432);
+        $adapter = new TCPAdapter(port: 5432, resolver: $failoverResolver);
         $adapter->setSkipValidation(true);
 
         $result = $adapter->route('okdb');
@@ -162,7 +162,7 @@ class EdgeIntegrationTest extends TestCase
 
         $failoverResolver = new EdgeFailoverResolver($primaryResolver, $secondaryResolver);
 
-        $adapter = new TCPAdapter($failoverResolver, port: 5432);
+        $adapter = new TCPAdapter(port: 5432, resolver: $failoverResolver);
         $adapter->setSkipValidation(true);
 
         $this->expectException(ResolverException::class);
@@ -189,7 +189,7 @@ class EdgeIntegrationTest extends TestCase
 
         $failoverResolver = new EdgeFailoverResolver($primaryResolver, $secondaryResolver);
 
-        $adapter = new TCPAdapter($failoverResolver, port: 5432);
+        $adapter = new TCPAdapter(port: 5432, resolver: $failoverResolver);
         $adapter->setSkipValidation(true);
 
         $result = $adapter->route('unavaildb');
@@ -211,7 +211,7 @@ class EdgeIntegrationTest extends TestCase
             'password' => 'cached_pass',
         ]);
 
-        $adapter = new TCPAdapter($resolver, port: 5432);
+        $adapter = new TCPAdapter(port: 5432, resolver: $resolver);
         $adapter->setSkipValidation(true);
 
         // Ensure we are at the start of a fresh second so both calls
@@ -244,7 +244,7 @@ class EdgeIntegrationTest extends TestCase
             'password' => 'pass',
         ]);
 
-        $adapter = new TCPAdapter($resolver, port: 5432);
+        $adapter = new TCPAdapter(port: 5432, resolver: $resolver);
         $adapter->setSkipValidation(true);
 
         // Align to second boundary
@@ -288,7 +288,7 @@ class EdgeIntegrationTest extends TestCase
             'password' => 'pass2',
         ]);
 
-        $adapter = new TCPAdapter($resolver, port: 5432);
+        $adapter = new TCPAdapter(port: 5432, resolver: $resolver);
         $adapter->setSkipValidation(true);
 
         $result1 = $adapter->route('db1');
@@ -316,7 +316,7 @@ class EdgeIntegrationTest extends TestCase
             ]);
         }
 
-        $adapter = new TCPAdapter($resolver, port: 5432);
+        $adapter = new TCPAdapter(port: 5432, resolver: $resolver);
         $adapter->setSkipValidation(true);
 
         $results = [];
@@ -357,7 +357,7 @@ class EdgeIntegrationTest extends TestCase
         ]);
         // 'baddb' is intentionally not registered
 
-        $adapter = new TCPAdapter($resolver, port: 5432);
+        $adapter = new TCPAdapter(port: 5432, resolver: $resolver);
         $adapter->setSkipValidation(true);
 
         $result1 = $adapter->route('gooddb1');
@@ -391,7 +391,7 @@ class EdgeIntegrationTest extends TestCase
             'password' => 'pass',
         ]);
 
-        $adapter = new TCPAdapter($resolver, port: 5432);
+        $adapter = new TCPAdapter(port: 5432, resolver: $resolver);
         $adapter->setSkipValidation(true);
 
         // Resolve the database
@@ -426,7 +426,7 @@ class EdgeIntegrationTest extends TestCase
             'password' => 'pass',
         ]);
 
-        $adapter = new TCPAdapter($resolver, port: 5432);
+        $adapter = new TCPAdapter(port: 5432, resolver: $resolver);
         $adapter->setSkipValidation(true);
 
         // Align to second boundary

@@ -23,8 +23,8 @@ use Utopia\Proxy\Resolver;
  * Example:
  * ```php
  * $tls = new TLS(certificate: '/certs/server.crt', key: '/certs/server.key');
- * $config = new Config(host: '0.0.0.0', ports: [5432, 3306], tls: $tls);
- * $server = new Swoole($resolver, $config);
+ * $config = new Config(ports: [5432, 3306], tls: $tls);
+ * $server = new Swoole($config, $resolver);
  * $server->start();
  * ```
  */
@@ -60,11 +60,11 @@ class Swoole
     protected ?Resolver $resolver;
 
     public function __construct(
+        Config $config,
         ?Resolver $resolver = null,
-        ?Config $config = null,
     ) {
         $this->resolver = $resolver;
-        $this->config = $config ?? new Config();
+        $this->config = $config;
 
         if ($this->config->isTlsEnabled()) {
             /** @var TLS $tls */
@@ -167,14 +167,15 @@ class Swoole
                 /** @var TCPAdapter $adapter */
                 $adapter = ($this->config->adapterFactory)($port);
             } else {
-                $adapter = new TCPAdapter($this->resolver, port: $port);
+                $adapter = new TCPAdapter(port: $port, resolver: $this->resolver);
             }
 
             if ($this->config->skipValidation) {
                 $adapter->setSkipValidation(true);
             }
 
-            $adapter->setTimeout($this->config->connectTimeout);
+            $adapter->setTimeout($this->config->timeout);
+            $adapter->setConnectTimeout($this->config->connectTimeout);
 
             $this->adapters[$port] = $adapter;
         }
@@ -213,7 +214,7 @@ class Swoole
 
         // Fast path: existing connection - forward to appropriate backend
         if (isset($this->clients[$fd])) {
-            $port = $this->clientPorts[$fd] ?? 5432;
+            $port = $this->clientPorts[$fd] ?? 0;
             $adapter = $this->adapters[$port] ?? null;
 
             if ($adapter !== null) {
@@ -287,7 +288,7 @@ class Swoole
      */
     protected function forward(Server $server, int $clientFd, Client $backendClient): void
     {
-        $bufferSize = $this->config->recvBufferSize;
+        $bufferSize = $this->config->receiveBufferSize;
         /** @var \Swoole\Coroutine\Socket $backendSocket */
         $backendSocket = $backendClient->exportSocket();
 

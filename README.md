@@ -250,7 +250,7 @@ $config = new Config(
     maxConnections: 200_000,
     socketBufferSize: 16 * 1024 * 1024,
     bufferOutputSize: 16 * 1024 * 1024,
-    recvBufferSize: 131_072,
+    receiveBufferSize: 131_072,
     connectTimeout: 5.0,
     skipValidation: false,
     tls: null,

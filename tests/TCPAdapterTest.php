@@ -21,31 +21,25 @@ class TCPAdapterTest extends TestCase
 
     public function testProtocolDetection(): void
     {
-        $pg = new TCPAdapter($this->resolver, port: 5432);
-        $this->assertSame(Protocol::PostgreSQL, $pg->getProtocol());
+        $postgresql = new TCPAdapter(port: 5432, resolver: $this->resolver);
+        $this->assertSame(Protocol::PostgreSQL, $postgresql->getProtocol());
 
-        $mysql = new TCPAdapter($this->resolver, port: 3306);
+        $mysql = new TCPAdapter(port: 3306, resolver: $this->resolver);
         $this->assertSame(Protocol::MySQL, $mysql->getProtocol());
 
-        $mongo = new TCPAdapter($this->resolver, port: 27017);
-        $this->assertSame(Protocol::MongoDB, $mongo->getProtocol());
-    }
-
-    public function testDescription(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 5432);
-        $this->assertSame('TCP proxy adapter', $adapter->getDescription());
+        $mongodb = new TCPAdapter(port: 27017, resolver: $this->resolver);
+        $this->assertSame(Protocol::MongoDB, $mongodb->getProtocol());
     }
 
     public function testName(): void
     {
-        $adapter = new TCPAdapter($this->resolver, port: 5432);
+        $adapter = new TCPAdapter(port: 5432, resolver: $this->resolver);
         $this->assertSame('TCP', $adapter->getName());
     }
 
     public function testPort(): void
     {
-        $adapter = new TCPAdapter($this->resolver, port: 3306);
+        $adapter = new TCPAdapter(port: 3306, resolver: $this->resolver);
         $this->assertSame(3306, $adapter->port);
     }
 }

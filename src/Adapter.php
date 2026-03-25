@@ -46,7 +46,6 @@ class Adapter
         },
         protected string $name = 'Generic',
         protected Protocol $protocol = Protocol::TCP,
-        protected string $description = 'Generic proxy adapter',
     ) {
         $this->initRouter();
     }
@@ -163,14 +162,6 @@ class Adapter
     public function getProtocol(): Protocol
     {
         return $this->protocol;
-    }
-
-    /**
-     * Get adapter description
-     */
-    public function getDescription(): string
-    {
-        return $this->description;
     }
 
     /**

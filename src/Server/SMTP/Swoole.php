@@ -193,12 +193,12 @@ class Swoole
 
         $client = new Client(SWOOLE_SOCK_TCP);
 
-        if (!$client->connect($host, $port, 30)) {
+        if (!$client->connect($host, $port, $this->config->connectTimeout)) {
             throw new \Exception("Failed to connect to backend SMTP: {$host}:{$port}");
         }
 
         $client->set([
-            'timeout' => 5,
+            'timeout' => $this->config->timeout,
         ]);
 
         $client->recv(8192);

@@ -22,29 +22,26 @@ class AdapterMetadataTest extends TestCase
 
     public function testHttpAdapterMetadata(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP, description: 'HTTP proxy adapter');
+        $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
 
         $this->assertSame('HTTP', $adapter->getName());
         $this->assertSame(Protocol::HTTP, $adapter->getProtocol());
-        $this->assertSame('HTTP proxy adapter', $adapter->getDescription());
     }
 
     public function testSmtpAdapterMetadata(): void
     {
-        $adapter = new Adapter($this->resolver, name: 'SMTP', protocol: Protocol::SMTP, description: 'SMTP proxy adapter');
+        $adapter = new Adapter($this->resolver, name: 'SMTP', protocol: Protocol::SMTP);
 
         $this->assertSame('SMTP', $adapter->getName());
         $this->assertSame(Protocol::SMTP, $adapter->getProtocol());
-        $this->assertSame('SMTP proxy adapter', $adapter->getDescription());
     }
 
     public function testTcpAdapterMetadata(): void
     {
-        $adapter = new TCPAdapter($this->resolver, port: 5432);
+        $adapter = new TCPAdapter(port: 5432, resolver: $this->resolver);
 
         $this->assertSame('TCP', $adapter->getName());
         $this->assertSame(Protocol::PostgreSQL, $adapter->getProtocol());
-        $this->assertSame('TCP proxy adapter', $adapter->getDescription());
         $this->assertSame(5432, $adapter->port);
     }
 }

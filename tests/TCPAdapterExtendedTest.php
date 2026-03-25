@@ -21,55 +21,51 @@ class TCPAdapterExtendedTest extends TestCase
 
     public function testProtocolForPostgresPort(): void
     {
-        $adapter = new TCPAdapter($this->resolver, port: 5432);
+        $adapter = new TCPAdapter(port: 5432, resolver: $this->resolver);
         $this->assertSame(Protocol::PostgreSQL, $adapter->getProtocol());
     }
 
     public function testProtocolForMysqlPort(): void
     {
-        $adapter = new TCPAdapter($this->resolver, port: 3306);
+        $adapter = new TCPAdapter(port: 3306, resolver: $this->resolver);
         $this->assertSame(Protocol::MySQL, $adapter->getProtocol());
     }
 
     public function testProtocolForMongoPort(): void
     {
-        $adapter = new TCPAdapter($this->resolver, port: 27017);
+        $adapter = new TCPAdapter(port: 27017, resolver: $this->resolver);
         $this->assertSame(Protocol::MongoDB, $adapter->getProtocol());
     }
 
-    public function testProtocolThrowsForUnsupportedPort(): void
+    public function testUnknownPortReturnsTcp(): void
     {
-        $adapter = new TCPAdapter($this->resolver, port: 8080);
-
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Unsupported protocol on port: 8080');
-
-        $adapter->getProtocol();
+        $adapter = new TCPAdapter(port: 8080, resolver: $this->resolver);
+        $this->assertSame(Protocol::TCP, $adapter->getProtocol());
     }
 
     public function testPortProperty(): void
     {
-        $adapter = new TCPAdapter($this->resolver, port: 5432);
+        $adapter = new TCPAdapter(port: 5432, resolver: $this->resolver);
         $this->assertSame(5432, $adapter->port);
     }
 
     public function testNameIsAlwaysTCP(): void
     {
-        $adapter = new TCPAdapter($this->resolver, port: 5432);
+        $adapter = new TCPAdapter(port: 5432, resolver: $this->resolver);
         $this->assertSame('TCP', $adapter->getName());
     }
 
-    public function testDescription(): void
+    public function testSetTimeoutReturnsSelf(): void
     {
-        $adapter = new TCPAdapter($this->resolver, port: 5432);
-        $this->assertSame('TCP proxy adapter', $adapter->getDescription());
-    }
-
-    public function testSetConnectTimeoutReturnsSelf(): void
-    {
-        $adapter = new TCPAdapter($this->resolver, port: 5432);
+        $adapter = new TCPAdapter(port: 5432, resolver: $this->resolver);
         $result = $adapter->setTimeout(10.0);
         $this->assertSame($adapter, $result);
     }
 
+    public function testSetConnectTimeoutReturnsSelf(): void
+    {
+        $adapter = new TCPAdapter(port: 5432, resolver: $this->resolver);
+        $result = $adapter->setConnectTimeout(10.0);
+        $this->assertSame($adapter, $result);
+    }
 }
