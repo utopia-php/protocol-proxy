@@ -207,9 +207,16 @@ class Adapter
         try {
             if ($this->callback !== null) {
                 $resolved = ($this->callback)($resourceId);
-                $result = $resolved instanceof Resolver\Result
-                    ? $resolved
-                    : new Resolver\Result(endpoint: (string) $resolved);
+                if ($resolved instanceof Resolver\Result) {
+                    $result = $resolved;
+                } elseif (\is_string($resolved)) {
+                    $result = new Resolver\Result(endpoint: $resolved);
+                } else {
+                    throw new ResolverException(
+                        'Resolve callback must return Result or string',
+                        ResolverException::INTERNAL
+                    );
+                }
             } elseif ($this->resolver !== null) {
                 $result = $this->resolver->resolve($resourceId);
             } else {

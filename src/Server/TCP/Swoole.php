@@ -64,47 +64,12 @@ class Swoole
 
     protected ?Resolver $resolver;
 
-    /**
-     * @param  Resolver|string|null  $resolver  Resolver instance, or host string for named-param style
-     * @param  Config|array<string, mixed>|null  $config  Config object or array of settings
-     * @param  string|null  $host  Host address (named-param style)
-     * @param  array<int, int>|null  $ports  Port list (named-param style)
-     * @param  int|null  $workers  Worker count (named-param style)
-     */
     public function __construct(
-        Resolver|string|null $resolver = null,
-        Config|array|null $config = null,
-        ?string $host = null,
-        ?array $ports = null,
-        ?int $workers = null,
+        ?Resolver $resolver = null,
+        ?Config $config = null,
     ) {
-        // Detect named-param style: first arg is a string host, not a Resolver
-        if (\is_string($resolver)) {
-            $host = $resolver;
-            $this->resolver = null;
-        } else {
-            $this->resolver = $resolver;
-        }
-
-        // Build Config from array or named params
-        if (\is_array($config)) {
-            $this->config = self::buildConfig($config, $host, $ports, $workers);
-        } elseif ($config instanceof Config) {
-            $this->config = $config;
-        } else {
-            // Build from named params with defaults
-            $args = [];
-            if ($host !== null) {
-                $args['host'] = $host;
-            }
-            if ($ports !== null) {
-                $args['ports'] = $ports;
-            }
-            if ($workers !== null) {
-                $args['workers'] = $workers;
-            }
-            $this->config = new Config(...$args);
-        }
+        $this->resolver = $resolver;
+        $this->config = $config ?? new Config();
 
         if ($this->config->isTlsEnabled()) {
             /** @var TLS $tls */
@@ -135,46 +100,6 @@ class Swoole
         }
 
         $this->configure();
-    }
-
-    /**
-     * Build a Config object from an associative array of settings
-     *
-     * @param  array<string, mixed>  $settings
-     */
-    protected static function buildConfig(
-        array $settings,
-        ?string $host = null,
-        ?array $ports = null,
-        ?int $workers = null,
-    ): Config {
-        return new Config(
-            host: $host ?? ($settings['host'] ?? '0.0.0.0'),
-            ports: $ports ?? ($settings['ports'] ?? [5432, 3306, 27017]),
-            workers: $workers ?? ($settings['workers'] ?? 16),
-            maxConnections: $settings['max_connections'] ?? 200_000,
-            maxCoroutine: $settings['max_coroutine'] ?? 200_000,
-            socketBufferSize: $settings['socket_buffer_size'] ?? 16 * 1024 * 1024,
-            bufferOutputSize: $settings['buffer_output_size'] ?? 16 * 1024 * 1024,
-            reactorNum: $settings['reactor_num'] ?? null,
-            dispatchMode: $settings['dispatch_mode'] ?? 2,
-            enableReusePort: $settings['enable_reuse_port'] ?? true,
-            backlog: $settings['backlog'] ?? 65535,
-            packageMaxLength: $settings['package_max_length'] ?? 32 * 1024 * 1024,
-            tcpKeepidle: $settings['tcp_keepidle'] ?? 30,
-            tcpKeepinterval: $settings['tcp_keepinterval'] ?? 10,
-            tcpKeepcount: $settings['tcp_keepcount'] ?? 3,
-            enableCoroutine: $settings['enable_coroutine'] ?? true,
-            maxWaitTime: $settings['max_wait_time'] ?? 60,
-            logLevel: $settings['log_level'] ?? SWOOLE_LOG_ERROR,
-            logConnections: $settings['log_connections'] ?? false,
-            recvBufferSize: $settings['recv_buffer_size'] ?? 131072,
-            connectTimeout: $settings['backend_connect_timeout'] ?? 5.0,
-            skipValidation: $settings['skip_validation'] ?? false,
-            readWriteSplit: $settings['read_write_split'] ?? false,
-            tls: $settings['tls'] ?? null,
-            adapterFactory: $settings['adapter_factory'] ?? null,
-        );
     }
 
     protected function configure(): void
@@ -244,6 +169,7 @@ class Swoole
         // Initialize TCP adapter per worker per port
         foreach ($this->config->ports as $port) {
             if ($this->config->adapterFactory !== null) {
+                /** @var TCPAdapter $adapter */
                 $adapter = ($this->config->adapterFactory)($port);
             } else {
                 $adapter = new TCPAdapter($this->resolver, port: $port);

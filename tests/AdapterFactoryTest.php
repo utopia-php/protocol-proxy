@@ -38,7 +38,9 @@ class AdapterFactoryTest extends TestCase
         };
 
         $config = new Config(adapterFactory: $factory);
-        $result = ($config->adapterFactory)(5432);
+        $callable = $config->adapterFactory;
+        \assert($callable !== null);
+        $result = $callable(5432);
         $this->assertSame('adapter-for-port-5432', $result);
     }
 
@@ -51,9 +53,11 @@ class AdapterFactoryTest extends TestCase
         };
 
         $config = new Config(adapterFactory: $factory);
-        ($config->adapterFactory)(5432);
-        ($config->adapterFactory)(3306);
-        ($config->adapterFactory)(27017);
+        $callable = $config->adapterFactory;
+        \assert($callable !== null);
+        $callable(5432);
+        $callable(3306);
+        $callable(27017);
 
         $this->assertSame([5432, 3306, 27017], $receivedPorts);
     }

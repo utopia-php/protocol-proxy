@@ -156,18 +156,17 @@ class OnResolveCallbackTest extends TestCase
     {
         $resolverCalled = false;
 
-        $mockResolver = new class ($resolverCalled) extends MockResolver {
-            private bool $called;
+        $mockResolver = new class extends MockResolver {
+            public bool $wasCalled = false;
 
-            public function __construct(bool &$called)
+            public function __construct()
             {
-                $this->called = &$called;
                 parent::setEndpoint('resolver.example.com:8080');
             }
 
             public function resolve(string $resourceId): \Utopia\Proxy\Resolver\Result
             {
-                $this->called = true;
+                $this->wasCalled = true;
                 return parent::resolve($resourceId);
             }
         };
@@ -181,7 +180,7 @@ class OnResolveCallbackTest extends TestCase
         $result = $adapter->route('test-resource');
 
         $this->assertSame('callback.example.com:8080', $result->endpoint);
-        $this->assertFalse($resolverCalled);
+        $this->assertFalse($mockResolver->wasCalled);
     }
 
     /**
