@@ -124,7 +124,7 @@ class ConfigTest extends TestCase
     public function testDefaultBackendConnectTimeout(): void
     {
         $config = new Config();
-        $this->assertSame(5.0, $config->backendConnectTimeout);
+        $this->assertSame(5.0, $config->connectTimeout);
     }
 
     public function testDefaultSkipValidation(): void
@@ -171,8 +171,8 @@ class ConfigTest extends TestCase
 
     public function testCustomBackendConnectTimeout(): void
     {
-        $config = new Config(backendConnectTimeout: 10.5);
-        $this->assertSame(10.5, $config->backendConnectTimeout);
+        $config = new Config(connectTimeout: 10.5);
+        $this->assertSame(10.5, $config->connectTimeout);
     }
 
     public function testCustomSkipValidation(): void
@@ -201,7 +201,7 @@ class ConfigTest extends TestCase
 
     public function testIsTlsEnabledTrueWhenConfigured(): void
     {
-        $tls = new TLS(certPath: '/certs/server.crt', keyPath: '/certs/server.key');
+        $tls = new TLS(certificate: '/certs/server.crt', key: '/certs/server.key');
         $config = new Config(tls: $tls);
         $this->assertTrue($config->isTlsEnabled());
     }
@@ -214,7 +214,7 @@ class ConfigTest extends TestCase
 
     public function testGetTlsContextReturnsInstanceWhenConfigured(): void
     {
-        $tls = new TLS(certPath: '/certs/server.crt', keyPath: '/certs/server.key');
+        $tls = new TLS(certificate: '/certs/server.crt', key: '/certs/server.key');
         $config = new Config(tls: $tls);
 
         $ctx = $config->getTlsContext();
@@ -224,7 +224,7 @@ class ConfigTest extends TestCase
 
     public function testGetTlsContextReturnsNewInstanceEachCall(): void
     {
-        $tls = new TLS(certPath: '/certs/server.crt', keyPath: '/certs/server.key');
+        $tls = new TLS(certificate: '/certs/server.crt', key: '/certs/server.key');
         $config = new Config(tls: $tls);
 
         $ctx1 = $config->getTlsContext();

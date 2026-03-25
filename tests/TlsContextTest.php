@@ -17,7 +17,7 @@ class TlsContextTest extends TestCase
 
     public function testToSwooleConfigBasic(): void
     {
-        $tls = new TLS(certPath: '/certs/server.crt', keyPath: '/certs/server.key');
+        $tls = new TLS(certificate: '/certs/server.crt', key: '/certs/server.key');
         $ctx = new TlsContext($tls);
 
         $config = $ctx->toSwooleConfig();
@@ -35,9 +35,9 @@ class TlsContextTest extends TestCase
     public function testToSwooleConfigWithCaPath(): void
     {
         $tls = new TLS(
-            certPath: '/certs/server.crt',
-            keyPath: '/certs/server.key',
-            caPath: '/certs/ca.crt',
+            certificate: '/certs/server.crt',
+            key: '/certs/server.key',
+            ca: '/certs/ca.crt',
         );
         $ctx = new TlsContext($tls);
 
@@ -50,9 +50,9 @@ class TlsContextTest extends TestCase
     public function testToSwooleConfigWithMutualTLS(): void
     {
         $tls = new TLS(
-            certPath: '/certs/server.crt',
-            keyPath: '/certs/server.key',
-            caPath: '/certs/ca.crt',
+            certificate: '/certs/server.crt',
+            key: '/certs/server.key',
+            ca: '/certs/ca.crt',
             requireClientCert: true,
         );
         $ctx = new TlsContext($tls);
@@ -68,8 +68,8 @@ class TlsContextTest extends TestCase
     {
         $customCiphers = 'ECDHE-RSA-AES128-GCM-SHA256';
         $tls = new TLS(
-            certPath: '/certs/server.crt',
-            keyPath: '/certs/server.key',
+            certificate: '/certs/server.crt',
+            key: '/certs/server.key',
             ciphers: $customCiphers,
         );
         $ctx = new TlsContext($tls);
@@ -81,7 +81,7 @@ class TlsContextTest extends TestCase
 
     public function testToStreamContextReturnsResource(): void
     {
-        $tls = new TLS(certPath: '/certs/server.crt', keyPath: '/certs/server.key');
+        $tls = new TLS(certificate: '/certs/server.crt', key: '/certs/server.key');
         $ctx = new TlsContext($tls);
 
         $streamCtx = $ctx->toStreamContext();
@@ -91,7 +91,7 @@ class TlsContextTest extends TestCase
 
     public function testToStreamContextHasCorrectSslOptions(): void
     {
-        $tls = new TLS(certPath: '/certs/server.crt', keyPath: '/certs/server.key');
+        $tls = new TLS(certificate: '/certs/server.crt', key: '/certs/server.key');
         $ctx = new TlsContext($tls);
 
         $streamCtx = $ctx->toStreamContext();
@@ -112,9 +112,9 @@ class TlsContextTest extends TestCase
     public function testToStreamContextWithCaFile(): void
     {
         $tls = new TLS(
-            certPath: '/certs/server.crt',
-            keyPath: '/certs/server.key',
-            caPath: '/certs/ca.crt',
+            certificate: '/certs/server.crt',
+            key: '/certs/server.key',
+            ca: '/certs/ca.crt',
         );
         $ctx = new TlsContext($tls);
 
@@ -130,9 +130,9 @@ class TlsContextTest extends TestCase
     public function testToStreamContextWithMutualTLS(): void
     {
         $tls = new TLS(
-            certPath: '/certs/server.crt',
-            keyPath: '/certs/server.key',
-            caPath: '/certs/ca.crt',
+            certificate: '/certs/server.crt',
+            key: '/certs/server.key',
+            ca: '/certs/ca.crt',
             requireClientCert: true,
         );
         $ctx = new TlsContext($tls);
@@ -150,7 +150,7 @@ class TlsContextTest extends TestCase
 
     public function testToStreamContextWithoutCaFile(): void
     {
-        $tls = new TLS(certPath: '/certs/server.crt', keyPath: '/certs/server.key');
+        $tls = new TLS(certificate: '/certs/server.crt', key: '/certs/server.key');
         $ctx = new TlsContext($tls);
 
         $streamCtx = $ctx->toStreamContext();
@@ -164,7 +164,7 @@ class TlsContextTest extends TestCase
 
     public function testGetSocketTypeIncludesSslFlag(): void
     {
-        $tls = new TLS(certPath: '/certs/server.crt', keyPath: '/certs/server.key');
+        $tls = new TLS(certificate: '/certs/server.crt', key: '/certs/server.key');
         $ctx = new TlsContext($tls);
 
         $socketType = $ctx->getSocketType();
@@ -174,7 +174,7 @@ class TlsContextTest extends TestCase
 
     public function testGetTlsReturnsOriginalInstance(): void
     {
-        $tls = new TLS(certPath: '/certs/server.crt', keyPath: '/certs/server.key');
+        $tls = new TLS(certificate: '/certs/server.crt', key: '/certs/server.key');
         $ctx = new TlsContext($tls);
 
         $this->assertSame($tls, $ctx->getTls());

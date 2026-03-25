@@ -16,17 +16,17 @@ class TLSTest extends TestCase
 
     public function testConstructorSetsRequiredPaths(): void
     {
-        $tls = new TLS(certPath: '/certs/server.crt', keyPath: '/certs/server.key');
+        $tls = new TLS(certificate: '/certs/server.crt', key: '/certs/server.key');
 
-        $this->assertSame('/certs/server.crt', $tls->certPath);
-        $this->assertSame('/certs/server.key', $tls->keyPath);
+        $this->assertSame('/certs/server.crt', $tls->certificate);
+        $this->assertSame('/certs/server.key', $tls->key);
     }
 
     public function testConstructorDefaultValues(): void
     {
-        $tls = new TLS(certPath: '/certs/server.crt', keyPath: '/certs/server.key');
+        $tls = new TLS(certificate: '/certs/server.crt', key: '/certs/server.key');
 
-        $this->assertSame('', $tls->caPath);
+        $this->assertSame('', $tls->ca);
         $this->assertFalse($tls->requireClientCert);
         $this->assertSame(TLS::DEFAULT_CIPHERS, $tls->ciphers);
         $this->assertSame(TLS::MIN_TLS_VERSION, $tls->minProtocol);
@@ -35,15 +35,15 @@ class TLSTest extends TestCase
     public function testConstructorCustomValues(): void
     {
         $tls = new TLS(
-            certPath: '/certs/server.crt',
-            keyPath: '/certs/server.key',
-            caPath: '/certs/ca.crt',
+            certificate: '/certs/server.crt',
+            key: '/certs/server.key',
+            ca: '/certs/ca.crt',
             requireClientCert: true,
             ciphers: 'ECDHE-RSA-AES128-GCM-SHA256',
             minProtocol: SWOOLE_SSL_TLSv1_3,
         );
 
-        $this->assertSame('/certs/ca.crt', $tls->caPath);
+        $this->assertSame('/certs/ca.crt', $tls->ca);
         $this->assertTrue($tls->requireClientCert);
         $this->assertSame('ECDHE-RSA-AES128-GCM-SHA256', $tls->ciphers);
         $this->assertSame(SWOOLE_SSL_TLSv1_3, $tls->minProtocol);
@@ -80,7 +80,7 @@ class TLSTest extends TestCase
         $keyFile = tempnam(sys_get_temp_dir(), 'key_');
 
         try {
-            $tls = new TLS(certPath: $certFile, keyPath: $keyFile);
+            $tls = new TLS(certificate: $certFile, key: $keyFile);
             $tls->validate();
             $this->addToAssertionCount(1);
         } finally {
@@ -94,7 +94,7 @@ class TLSTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('TLS certificate file not readable');
 
-        $tls = new TLS(certPath: '/nonexistent/cert.crt', keyPath: '/tmp/key.key');
+        $tls = new TLS(certificate: '/nonexistent/cert.crt', key: '/tmp/key.key');
         $tls->validate();
     }
 
@@ -106,7 +106,7 @@ class TLSTest extends TestCase
             $this->expectException(\RuntimeException::class);
             $this->expectExceptionMessage('TLS private key file not readable');
 
-            $tls = new TLS(certPath: $certFile, keyPath: '/nonexistent/key.key');
+            $tls = new TLS(certificate: $certFile, key: '/nonexistent/key.key');
             $tls->validate();
         } finally {
             unlink($certFile);
@@ -123,8 +123,8 @@ class TLSTest extends TestCase
             $this->expectExceptionMessage('CA certificate path is required when client certificate verification is enabled');
 
             $tls = new TLS(
-                certPath: $certFile,
-                keyPath: $keyFile,
+                certificate: $certFile,
+                key: $keyFile,
                 requireClientCert: true,
             );
             $tls->validate();
@@ -144,9 +144,9 @@ class TLSTest extends TestCase
             $this->expectExceptionMessage('TLS CA certificate file not readable');
 
             $tls = new TLS(
-                certPath: $certFile,
-                keyPath: $keyFile,
-                caPath: '/nonexistent/ca.crt',
+                certificate: $certFile,
+                key: $keyFile,
+                ca: '/nonexistent/ca.crt',
             );
             $tls->validate();
         } finally {
@@ -163,9 +163,9 @@ class TLSTest extends TestCase
 
         try {
             $tls = new TLS(
-                certPath: $certFile,
-                keyPath: $keyFile,
-                caPath: $caFile,
+                certificate: $certFile,
+                key: $keyFile,
+                ca: $caFile,
                 requireClientCert: true,
             );
             $tls->validate();
@@ -183,8 +183,8 @@ class TLSTest extends TestCase
         $keyFile = tempnam(sys_get_temp_dir(), 'key_');
 
         try {
-            // caPath is empty and requireClientCert is false — should pass
-            $tls = new TLS(certPath: $certFile, keyPath: $keyFile);
+            // ca is empty and requireClientCert is false — should pass
+            $tls = new TLS(certificate: $certFile, key: $keyFile);
             $tls->validate();
             $this->addToAssertionCount(1);
         } finally {
@@ -196,43 +196,43 @@ class TLSTest extends TestCase
     public function testIsMutualTLSReturnsTrueWhenBothConditionsMet(): void
     {
         $tls = new TLS(
-            certPath: '/certs/server.crt',
-            keyPath: '/certs/server.key',
-            caPath: '/certs/ca.crt',
+            certificate: '/certs/server.crt',
+            key: '/certs/server.key',
+            ca: '/certs/ca.crt',
             requireClientCert: true,
         );
 
-        $this->assertTrue($tls->isMutualTLS());
+        $this->assertTrue($tls->isMutual());
     }
 
     public function testIsMutualTLSReturnsFalseWhenClientCertNotRequired(): void
     {
         $tls = new TLS(
-            certPath: '/certs/server.crt',
-            keyPath: '/certs/server.key',
-            caPath: '/certs/ca.crt',
+            certificate: '/certs/server.crt',
+            key: '/certs/server.key',
+            ca: '/certs/ca.crt',
             requireClientCert: false,
         );
 
-        $this->assertFalse($tls->isMutualTLS());
+        $this->assertFalse($tls->isMutual());
     }
 
     public function testIsMutualTLSReturnsFalseWhenCaPathEmpty(): void
     {
         $tls = new TLS(
-            certPath: '/certs/server.crt',
-            keyPath: '/certs/server.key',
+            certificate: '/certs/server.crt',
+            key: '/certs/server.key',
             requireClientCert: true,
         );
 
-        $this->assertFalse($tls->isMutualTLS());
+        $this->assertFalse($tls->isMutual());
     }
 
     public function testIsMutualTLSReturnsFalseWithDefaults(): void
     {
-        $tls = new TLS(certPath: '/certs/server.crt', keyPath: '/certs/server.key');
+        $tls = new TLS(certificate: '/certs/server.crt', key: '/certs/server.key');
 
-        $this->assertFalse($tls->isMutualTLS());
+        $this->assertFalse($tls->isMutual());
     }
 
     public function testIsPostgreSQLSSLRequestWithValidData(): void

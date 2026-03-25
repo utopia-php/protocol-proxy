@@ -195,7 +195,7 @@ class EdgeIntegrationTest extends TestCase
 
         // Before transaction: SELECT goes to read replica
         $selectData = $this->buildPgQuery('SELECT * FROM users');
-        $classification = $adapter->classifyQuery($selectData, $clientFd);
+        $classification = $adapter->classify($selectData, $clientFd);
         $this->assertSame(QueryType::Read, $classification);
 
         $result = $adapter->routeQuery('txdb', $classification);
@@ -203,12 +203,12 @@ class EdgeIntegrationTest extends TestCase
 
         // BEGIN pins to primary
         $beginData = $this->buildPgQuery('BEGIN');
-        $classification = $adapter->classifyQuery($beginData, $clientFd);
+        $classification = $adapter->classify($beginData, $clientFd);
         $this->assertSame(QueryType::Write, $classification);
-        $this->assertTrue($adapter->isConnectionPinned($clientFd));
+        $this->assertTrue($adapter->isPinned($clientFd));
 
         // During transaction: SELECT goes to primary (pinned)
-        $classification = $adapter->classifyQuery($selectData, $clientFd);
+        $classification = $adapter->classify($selectData, $clientFd);
         $this->assertSame(QueryType::Write, $classification);
 
         $result = $adapter->routeQuery('txdb', $classification);
@@ -216,11 +216,11 @@ class EdgeIntegrationTest extends TestCase
 
         // COMMIT unpins
         $commitData = $this->buildPgQuery('COMMIT');
-        $adapter->classifyQuery($commitData, $clientFd);
-        $this->assertFalse($adapter->isConnectionPinned($clientFd));
+        $adapter->classify($commitData, $clientFd);
+        $this->assertFalse($adapter->isPinned($clientFd));
 
         // After transaction: SELECT goes back to read replica
-        $classification = $adapter->classifyQuery($selectData, $clientFd);
+        $classification = $adapter->classify($selectData, $clientFd);
         $this->assertSame(QueryType::Read, $classification);
 
         $result = $adapter->routeQuery('txdb', $classification);
@@ -538,7 +538,7 @@ class EdgeIntegrationTest extends TestCase
         $this->assertSame('lifecycle1', $resolver->getConnects()[0]['resourceId']);
 
         // Track activity
-        $adapter->setActivityInterval(0);
+        $adapter->setInterval(0);
         $adapter->track('lifecycle1', ['query' => 'SELECT 1']);
         $this->assertCount(1, $resolver->getActivities());
 

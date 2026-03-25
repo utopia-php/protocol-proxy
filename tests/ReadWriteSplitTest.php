@@ -72,7 +72,7 @@ class ReadWriteSplitTest extends TestCase
         $adapter->setReadWriteSplit(true);
 
         $data = $this->buildPgQuery('SELECT * FROM users');
-        $this->assertSame(QueryType::Read, $adapter->classifyQuery($data, 1));
+        $this->assertSame(QueryType::Read, $adapter->classify($data, 1));
     }
 
     public function testClassifyPgInsertAsWrite(): void
@@ -81,7 +81,7 @@ class ReadWriteSplitTest extends TestCase
         $adapter->setReadWriteSplit(true);
 
         $data = $this->buildPgQuery("INSERT INTO users (name) VALUES ('x')");
-        $this->assertSame(QueryType::Write, $adapter->classifyQuery($data, 1));
+        $this->assertSame(QueryType::Write, $adapter->classify($data, 1));
     }
 
     public function testClassifyMysqlSelectAsRead(): void
@@ -90,7 +90,7 @@ class ReadWriteSplitTest extends TestCase
         $adapter->setReadWriteSplit(true);
 
         $data = $this->buildMySQLQuery('SELECT * FROM users');
-        $this->assertSame(QueryType::Read, $adapter->classifyQuery($data, 1));
+        $this->assertSame(QueryType::Read, $adapter->classify($data, 1));
     }
 
     public function testClassifyMysqlInsertAsWrite(): void
@@ -99,7 +99,7 @@ class ReadWriteSplitTest extends TestCase
         $adapter->setReadWriteSplit(true);
 
         $data = $this->buildMySQLQuery("INSERT INTO users (name) VALUES ('x')");
-        $this->assertSame(QueryType::Write, $adapter->classifyQuery($data, 1));
+        $this->assertSame(QueryType::Write, $adapter->classify($data, 1));
     }
 
     public function testClassifyReturnsWriteWhenSplitDisabled(): void
@@ -108,7 +108,7 @@ class ReadWriteSplitTest extends TestCase
         // Read/write split is disabled by default
 
         $data = $this->buildPgQuery('SELECT * FROM users');
-        $this->assertSame(QueryType::Write, $adapter->classifyQuery($data, 1));
+        $this->assertSame(QueryType::Write, $adapter->classify($data, 1));
     }
 
     public function testBeginPinsConnectionToPrimary(): void
@@ -119,13 +119,13 @@ class ReadWriteSplitTest extends TestCase
         $clientFd = 42;
 
         // Not pinned initially
-        $this->assertFalse($adapter->isConnectionPinned($clientFd));
+        $this->assertFalse($adapter->isPinned($clientFd));
 
         // BEGIN pins
         $data = $this->buildPgQuery('BEGIN');
-        $result = $adapter->classifyQuery($data, $clientFd);
+        $result = $adapter->classify($data, $clientFd);
         $this->assertSame(QueryType::Write, $result);
-        $this->assertTrue($adapter->isConnectionPinned($clientFd));
+        $this->assertTrue($adapter->isPinned($clientFd));
     }
 
     public function testPinnedConnectionRoutesSelectToWrite(): void
@@ -136,12 +136,12 @@ class ReadWriteSplitTest extends TestCase
         $clientFd = 42;
 
         // Begin transaction
-        $adapter->classifyQuery($this->buildPgQuery('BEGIN'), $clientFd);
-        $this->assertTrue($adapter->isConnectionPinned($clientFd));
+        $adapter->classify($this->buildPgQuery('BEGIN'), $clientFd);
+        $this->assertTrue($adapter->isPinned($clientFd));
 
         // SELECT should still route to WRITE when pinned
         $data = $this->buildPgQuery('SELECT * FROM users');
-        $this->assertSame(QueryType::Write, $adapter->classifyQuery($data, $clientFd));
+        $this->assertSame(QueryType::Write, $adapter->classify($data, $clientFd));
     }
 
     public function testCommitUnpinsConnection(): void
@@ -152,16 +152,16 @@ class ReadWriteSplitTest extends TestCase
         $clientFd = 42;
 
         // Begin transaction
-        $adapter->classifyQuery($this->buildPgQuery('BEGIN'), $clientFd);
-        $this->assertTrue($adapter->isConnectionPinned($clientFd));
+        $adapter->classify($this->buildPgQuery('BEGIN'), $clientFd);
+        $this->assertTrue($adapter->isPinned($clientFd));
 
         // COMMIT unpins
-        $adapter->classifyQuery($this->buildPgQuery('COMMIT'), $clientFd);
-        $this->assertFalse($adapter->isConnectionPinned($clientFd));
+        $adapter->classify($this->buildPgQuery('COMMIT'), $clientFd);
+        $this->assertFalse($adapter->isPinned($clientFd));
 
         // Now SELECT should route to READ again
         $data = $this->buildPgQuery('SELECT * FROM users');
-        $this->assertSame(QueryType::Read, $adapter->classifyQuery($data, $clientFd));
+        $this->assertSame(QueryType::Read, $adapter->classify($data, $clientFd));
     }
 
     public function testRollbackUnpinsConnection(): void
@@ -172,12 +172,12 @@ class ReadWriteSplitTest extends TestCase
         $clientFd = 42;
 
         // Begin transaction
-        $adapter->classifyQuery($this->buildPgQuery('BEGIN'), $clientFd);
-        $this->assertTrue($adapter->isConnectionPinned($clientFd));
+        $adapter->classify($this->buildPgQuery('BEGIN'), $clientFd);
+        $this->assertTrue($adapter->isPinned($clientFd));
 
         // ROLLBACK unpins
-        $adapter->classifyQuery($this->buildPgQuery('ROLLBACK'), $clientFd);
-        $this->assertFalse($adapter->isConnectionPinned($clientFd));
+        $adapter->classify($this->buildPgQuery('ROLLBACK'), $clientFd);
+        $this->assertFalse($adapter->isPinned($clientFd));
     }
 
     public function testStartTransactionPinsConnection(): void
@@ -187,8 +187,8 @@ class ReadWriteSplitTest extends TestCase
 
         $clientFd = 42;
 
-        $adapter->classifyQuery($this->buildPgQuery('START TRANSACTION'), $clientFd);
-        $this->assertTrue($adapter->isConnectionPinned($clientFd));
+        $adapter->classify($this->buildPgQuery('START TRANSACTION'), $clientFd);
+        $this->assertTrue($adapter->isPinned($clientFd));
     }
 
     public function testMysqlBeginPinsConnection(): void
@@ -198,8 +198,8 @@ class ReadWriteSplitTest extends TestCase
 
         $clientFd = 42;
 
-        $adapter->classifyQuery($this->buildMySQLQuery('BEGIN'), $clientFd);
-        $this->assertTrue($adapter->isConnectionPinned($clientFd));
+        $adapter->classify($this->buildMySQLQuery('BEGIN'), $clientFd);
+        $this->assertTrue($adapter->isPinned($clientFd));
     }
 
     public function testMysqlCommitUnpinsConnection(): void
@@ -209,11 +209,11 @@ class ReadWriteSplitTest extends TestCase
 
         $clientFd = 42;
 
-        $adapter->classifyQuery($this->buildMySQLQuery('BEGIN'), $clientFd);
-        $this->assertTrue($adapter->isConnectionPinned($clientFd));
+        $adapter->classify($this->buildMySQLQuery('BEGIN'), $clientFd);
+        $this->assertTrue($adapter->isPinned($clientFd));
 
-        $adapter->classifyQuery($this->buildMySQLQuery('COMMIT'), $clientFd);
-        $this->assertFalse($adapter->isConnectionPinned($clientFd));
+        $adapter->classify($this->buildMySQLQuery('COMMIT'), $clientFd);
+        $this->assertFalse($adapter->isPinned($clientFd));
     }
 
     public function testClearConnectionStateRemovesPin(): void
@@ -223,11 +223,11 @@ class ReadWriteSplitTest extends TestCase
 
         $clientFd = 42;
 
-        $adapter->classifyQuery($this->buildPgQuery('BEGIN'), $clientFd);
-        $this->assertTrue($adapter->isConnectionPinned($clientFd));
+        $adapter->classify($this->buildPgQuery('BEGIN'), $clientFd);
+        $this->assertTrue($adapter->isPinned($clientFd));
 
-        $adapter->clearConnectionState($clientFd);
-        $this->assertFalse($adapter->isConnectionPinned($clientFd));
+        $adapter->clearState($clientFd);
+        $this->assertFalse($adapter->isPinned($clientFd));
     }
 
     public function testPinningIsPerConnection(): void
@@ -239,15 +239,15 @@ class ReadWriteSplitTest extends TestCase
         $fd2 = 2;
 
         // Pin fd1
-        $adapter->classifyQuery($this->buildPgQuery('BEGIN'), $fd1);
-        $this->assertTrue($adapter->isConnectionPinned($fd1));
-        $this->assertFalse($adapter->isConnectionPinned($fd2));
+        $adapter->classify($this->buildPgQuery('BEGIN'), $fd1);
+        $this->assertTrue($adapter->isPinned($fd1));
+        $this->assertFalse($adapter->isPinned($fd2));
 
         // fd2 can still read
-        $this->assertSame(QueryType::Read, $adapter->classifyQuery($this->buildPgQuery('SELECT 1'), $fd2));
+        $this->assertSame(QueryType::Read, $adapter->classify($this->buildPgQuery('SELECT 1'), $fd2));
 
         // fd1 is pinned to write
-        $this->assertSame(QueryType::Write, $adapter->classifyQuery($this->buildPgQuery('SELECT 1'), $fd1));
+        $this->assertSame(QueryType::Write, $adapter->classify($this->buildPgQuery('SELECT 1'), $fd1));
     }
 
     public function testRouteQueryReadUsesReadEndpoint(): void
@@ -315,11 +315,11 @@ class ReadWriteSplitTest extends TestCase
         $clientFd = 42;
 
         // SET is a transaction-class command, routes to primary
-        $result = $adapter->classifyQuery($this->buildPgQuery("SET search_path = 'public'"), $clientFd);
+        $result = $adapter->classify($this->buildPgQuery("SET search_path = 'public'"), $clientFd);
         $this->assertSame(QueryType::Write, $result);
 
         // But SET should not pin the connection (only BEGIN/START pin)
-        $this->assertFalse($adapter->isConnectionPinned($clientFd));
+        $this->assertFalse($adapter->isPinned($clientFd));
     }
 
     public function testUnknownQueryRoutesToWrite(): void
@@ -329,7 +329,7 @@ class ReadWriteSplitTest extends TestCase
 
         // Use an unknown PG message type
         $data = 'X' . \pack('N', 5) . "\x00";
-        $result = $adapter->classifyQuery($data, 1);
+        $result = $adapter->classify($data, 1);
         $this->assertSame(QueryType::Write, $result);
     }
 }

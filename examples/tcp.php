@@ -72,9 +72,9 @@ if ($tlsEnabled) {
     }
 
     $tls = new TLS(
-        certPath: $tlsCert,
-        keyPath: $tlsKey,
-        caPath: $tlsCa,
+        certificate: $tlsCert,
+        key: $tlsKey,
+        ca: $tlsCa,
         requireClientCert: $tlsRequireClientCert,
     );
 }
@@ -136,9 +136,9 @@ echo "Workers: {$config->workers}\n";
 echo "Max connections: {$config->maxConnections}\n";
 echo "Server impl: {$serverImpl}\n";
 if ($tls !== null) {
-    echo "TLS: enabled (cert: {$tls->certPath})\n";
-    if ($tls->isMutualTLS()) {
-        echo "mTLS: enabled (ca: {$tls->caPath})\n";
+    echo "TLS: enabled (certificate: {$tls->certificate})\n";
+    if ($tls->isMutual()) {
+        echo "mTLS: enabled (ca: {$tls->ca})\n";
     }
 }
 echo "\n";

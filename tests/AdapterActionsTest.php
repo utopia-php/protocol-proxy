@@ -71,7 +71,7 @@ class AdapterActionsTest extends TestCase
     public function testTrackActivityDelegatesToResolverWithThrottling(): void
     {
         $adapter = new Adapter($this->resolver, name: 'HTTP', protocol: Protocol::HTTP);
-        $adapter->setActivityInterval(1); // 1 second throttle
+        $adapter->setInterval(1); // 1 second throttle
 
         // First call should trigger activity tracking
         $adapter->track('resource-123');

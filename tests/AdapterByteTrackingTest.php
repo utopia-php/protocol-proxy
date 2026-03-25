@@ -146,7 +146,7 @@ class AdapterByteTrackingTest extends TestCase
     public function testTrackFlushesAccumulatedBytes(): void
     {
         $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::TCP);
-        $adapter->setActivityInterval(0);
+        $adapter->setInterval(0);
 
         $adapter->recordBytes('resource-1', inbound: 100, outbound: 200);
         $adapter->track('resource-1');
@@ -160,7 +160,7 @@ class AdapterByteTrackingTest extends TestCase
     public function testTrackResetsCountersAfterFlush(): void
     {
         $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::TCP);
-        $adapter->setActivityInterval(0);
+        $adapter->setInterval(0);
 
         $adapter->recordBytes('resource-1', inbound: 100, outbound: 200);
         $adapter->track('resource-1');
@@ -182,7 +182,7 @@ class AdapterByteTrackingTest extends TestCase
     public function testTrackWithoutBytesOmitsByteMetadata(): void
     {
         $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::TCP);
-        $adapter->setActivityInterval(0);
+        $adapter->setInterval(0);
 
         $adapter->track('resource-1', ['type' => 'query']);
 
@@ -195,7 +195,7 @@ class AdapterByteTrackingTest extends TestCase
     public function testNotifyCloseClearsActivityTimestamp(): void
     {
         $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::TCP);
-        $adapter->setActivityInterval(9999);
+        $adapter->setInterval(9999);
 
         // Track once to set the timestamp
         $adapter->track('resource-1');
@@ -217,7 +217,7 @@ class AdapterByteTrackingTest extends TestCase
     {
         $adapter = new Adapter($this->resolver, name: 'Test', protocol: Protocol::TCP);
 
-        $result = $adapter->setActivityInterval(60);
+        $result = $adapter->setInterval(60);
         $this->assertSame($adapter, $result);
     }
 

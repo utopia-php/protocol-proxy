@@ -73,7 +73,7 @@ class TCPAdapterExtendedTest extends TestCase
     public function testSetConnectTimeoutReturnsSelf(): void
     {
         $adapter = new TCPAdapter($this->resolver, port: 5432);
-        $result = $adapter->setConnectTimeout(10.0);
+        $result = $adapter->setTimeout(10.0);
         $this->assertSame($adapter, $result);
     }
 
@@ -90,14 +90,14 @@ class TCPAdapterExtendedTest extends TestCase
         $adapter->setReadWriteSplit(true);
 
         // Should not throw
-        $adapter->clearConnectionState(999);
-        $this->assertFalse($adapter->isConnectionPinned(999));
+        $adapter->clearState(999);
+        $this->assertFalse($adapter->isPinned(999));
     }
 
     public function testIsConnectionPinnedDefaultFalse(): void
     {
         $adapter = new TCPAdapter($this->resolver, port: 5432);
-        $this->assertFalse($adapter->isConnectionPinned(1));
+        $this->assertFalse($adapter->isPinned(1));
     }
 
     public function testRouteQueryReadThrowsWhenNoReadEndpoint(): void
