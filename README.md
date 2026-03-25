@@ -36,7 +36,6 @@ Memory is the primary constraint. Scale estimate:
 - Built-in telemetry and metrics
 - SSRF validation for security
 - Support for HTTP, TCP (PostgreSQL, MySQL, MongoDB), and SMTP
-- Read/write split routing for database protocols
 - TLS termination with mTLS support
 - Coroutine-based server variants for each protocol
 
@@ -45,8 +44,6 @@ Memory is the primary constraint. Scale estimate:
 - PHP >= 8.4
 - ext-swoole >= 6.0
 - ext-redis
-- [utopia-php/query](https://github.com/utopia-php/query) (for database query classification)
-
 ## Installation
 
 ### Using Composer
@@ -171,62 +168,6 @@ $server = new SMTPServer(
 $server->start();
 ```
 
-## Read/Write Split Routing
-
-The TCP proxy supports automatic read/write split routing for database connections. Read queries are sent to replicas while writes go to the primary.
-
-### ReadWriteResolver
-
-Implement `ReadWriteResolver` to provide separate read and write endpoints:
-
-```php
-<?php
-use Utopia\Proxy\Resolver\ReadWriteResolver;
-use Utopia\Proxy\Resolver\Result;
-
-class MyDatabaseResolver implements ReadWriteResolver
-{
-    public function resolve(string $resourceId): Result
-    {
-        return new Result(endpoint: 'primary-db:5432');
-    }
-
-    public function resolveRead(string $resourceId): Result
-    {
-        return new Result(endpoint: 'replica-db:5432');
-    }
-
-    public function resolveWrite(string $resourceId): Result
-    {
-        return new Result(endpoint: 'primary-db:5432');
-    }
-
-    public function onConnect(string $resourceId, array $metadata = []): void {}
-    public function onDisconnect(string $resourceId, array $metadata = []): void {}
-    public function track(string $resourceId, array $metadata = []): void {}
-    public function purge(string $resourceId): void {}
-    public function getStats(): array { return []; }
-}
-```
-
-### Enabling Read/Write Split
-
-```php
-<?php
-use Utopia\Proxy\Server\TCP\Config;
-use Utopia\Proxy\Server\TCP\Swoole as TCPServer;
-
-$config = new Config(
-    ports: [5432, 3306],
-    readWriteSplit: true,
-);
-
-$server = new TCPServer(new MyDatabaseResolver(), $config);
-$server->start();
-```
-
-Query classification is handled by `utopia-php/query` parsers (PostgreSQL, MySQL, MongoDB). Transactions are automatically pinned to the primary — `BEGIN` pins, `COMMIT`/`ROLLBACK` unpins.
-
 ## TLS Termination
 
 The TCP proxy supports TLS termination for database connections, including mutual TLS (mTLS).
@@ -311,7 +252,6 @@ $config = new Config(
     bufferOutputSize: 16 * 1024 * 1024,
     recvBufferSize: 131_072,
     connectTimeout: 5.0,
-    readWriteSplit: false,
     skipValidation: false,
     tls: null,
 
@@ -410,17 +350,17 @@ composer check
 │                │   (Base Class)  │                               │
 │                └────────┬────────┘                               │
 │                         │                                        │
-│         ┌───────────────┼───────────────┐                        │
-│         │               │               │                        │
-│    ┌────▼────┐     ┌────▼────┐    ┌────▼────┐                   │
-│    │Resolver │     │ReadWrite│    │  Query  │                   │
-│    │(resolve)│     │Resolver │    │ Parser  │                   │
-│    └────┬────┘     └────┬────┘    └────┬────┘                   │
-│         │               │              │                         │
-│    ┌────▼────┐     ┌────▼────┐    ┌────▼────┐                   │
-│    │ Routing │     │  R/W    │    │ PG/MY/  │                   │
-│    │  Cache  │     │  Split  │    │  Mongo  │                   │
-│    └─────────┘     └─────────┘    └─────────┘                   │
+│         ┌───────────────┘                                       │
+│         │                                                        │
+│    ┌────▼────┐                                                   │
+│    │Resolver │                                                   │
+│    │(resolve)│                                                   │
+│    └────┬────┘                                                   │
+│         │                                                        │
+│    ┌────▼────┐                                                   │
+│    │ Routing │                                                   │
+│    │  Cache  │                                                   │
+│    └─────────┘                                                   │
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -454,18 +394,6 @@ interface Resolver
     public function track(string $resourceId, array $metadata = []): void;
     public function purge(string $resourceId): void;
     public function getStats(): array;
-}
-```
-
-### ReadWriteResolver Interface
-
-Extends `Resolver` for read/write split routing:
-
-```php
-interface ReadWriteResolver extends Resolver
-{
-    public function resolveRead(string $resourceId): Result;
-    public function resolveWrite(string $resourceId): Result;
 }
 ```
 

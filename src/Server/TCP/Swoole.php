@@ -7,8 +7,6 @@ use Swoole\Coroutine\Client;
 use Swoole\Server;
 use Utopia\Proxy\Adapter\TCP as TCPAdapter;
 use Utopia\Proxy\Resolver;
-use Utopia\Proxy\Resolver\ReadWriteResolver;
-use Utopia\Query\Type as QueryType;
 
 /**
  * High-performance TCP proxy server (Swoole Implementation)
@@ -46,9 +44,6 @@ class Swoole
 
     /** @var array<int, Client> Primary/default backend connections */
     protected array $clients = [];
-
-    /** @var array<int, Client> Read replica backend connections (when read/write split enabled) */
-    protected array $readClients = [];
 
     /** @var array<int, int> */
     protected array $clientPorts = [];
@@ -181,10 +176,6 @@ class Swoole
 
             $adapter->setTimeout($this->config->connectTimeout);
 
-            if ($this->config->readWriteSplit) {
-                $adapter->setReadWriteSplit(true);
-            }
-
             $this->adapters[$port] = $adapter;
         }
 
@@ -230,17 +221,6 @@ class Swoole
                 $adapter->track($fdKey);
             }
 
-            // When read/write split is active and we have a read backend, classify and route
-            if (isset($this->readClients[$fd]) && $adapter !== null) {
-                $queryType = $adapter->classify($data, $fd);
-
-                if ($queryType === QueryType::Read) {
-                    $this->readClients[$fd]->send($data);
-
-                    return;
-                }
-            }
-
             $this->clients[$fd]->send($data);
 
             return;
@@ -284,34 +264,6 @@ class Swoole
             // and is responsible for extracting any routing information
             $backendClient = $adapter->getConnection($data, $fd);
             $this->clients[$fd] = $backendClient;
-
-            // If read/write split is enabled, establish read replica connection
-            if ($adapter->isReadWriteSplit() && $this->resolver instanceof ReadWriteResolver) {
-                try {
-                    $readResult = $adapter->routeQuery($data, QueryType::Read);
-                    $readEndpoint = $readResult->endpoint;
-                    [$readHost, $readPort] = \explode(':', $readEndpoint . ':' . $port);
-
-                    $writeResult = $adapter->routeQuery($data, QueryType::Write);
-                    if ($readEndpoint !== $writeResult->endpoint) {
-                        $readClient = new \Swoole\Coroutine\Client(SWOOLE_SOCK_TCP);
-                        $readClient->set([
-                            'timeout' => $this->config->connectTimeout,
-                            'connect_timeout' => $this->config->connectTimeout,
-                            'open_tcp_nodelay' => true,
-                            'socket_buffer_size' => 2 * 1024 * 1024,
-                        ]);
-
-                        if ($readClient->connect($readHost, (int) $readPort, $this->config->connectTimeout)) {
-                            $this->readClients[$fd] = $readClient;
-                        }
-                    }
-                } catch (\Exception $e) {
-                    if ($this->config->logConnections) {
-                        echo "Read replica unavailable for #{$fd}: {$e->getMessage()}\n";
-                    }
-                }
-            }
 
             $adapter->notifyConnect($fdKey);
 
@@ -369,18 +321,12 @@ class Swoole
             unset($this->clients[$fd]);
         }
 
-        if (isset($this->readClients[$fd])) {
-            $this->readClients[$fd]->close();
-            unset($this->readClients[$fd]);
-        }
-
         if (isset($this->clientPorts[$fd])) {
             $port = $this->clientPorts[$fd];
             $adapter = $this->adapters[$port] ?? null;
             if ($adapter) {
                 $adapter->notifyClose((string) $fd);
                 $adapter->closeConnection($fd);
-                $adapter->clearState($fd);
             }
         }
 

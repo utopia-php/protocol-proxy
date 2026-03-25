@@ -8,9 +8,7 @@ use Utopia\Proxy\ConnectionResult;
 use Utopia\Proxy\Protocol;
 use Utopia\Proxy\Resolver;
 use Utopia\Proxy\Resolver\Exception as ResolverException;
-use Utopia\Proxy\Resolver\ReadWriteResolver;
 use Utopia\Proxy\Resolver\Result;
-use Utopia\Query\Type as QueryType;
 
 /**
  * Integration test for the proxy's ability to resolve resource
@@ -92,139 +90,6 @@ class EdgeIntegrationTest extends TestCase
         // The resolver receives the raw data directly and routes based on it
         $result = $adapter->route('raw-packet-data');
         $this->assertSame('10.0.1.50:5432', $result->endpoint);
-    }
-
-    /**
-     * @group integration
-     */
-    public function testReadWriteSplitResolvesToDifferentEndpoints(): void
-    {
-        $resolver = new EdgeMockReadWriteResolver();
-        $resolver->registerDatabase('rw123', [
-            'host' => '10.0.1.10',
-            'port' => 5432,
-            'username' => 'user',
-            'password' => 'pass',
-        ]);
-        $resolver->registerReadReplica('rw123', [
-            'host' => '10.0.1.20',
-            'port' => 5432,
-            'username' => 'replica_user',
-            'password' => 'replica_pass',
-        ]);
-        $resolver->registerWritePrimary('rw123', [
-            'host' => '10.0.1.10',
-            'port' => 5432,
-            'username' => 'primary_user',
-            'password' => 'primary_pass',
-        ]);
-
-        $adapter = new TCPAdapter($resolver, port: 5432);
-        $adapter->setReadWriteSplit(true);
-        $adapter->setSkipValidation(true);
-
-        $readResult = $adapter->routeQuery('rw123', QueryType::Read);
-        $this->assertSame('10.0.1.20:5432', $readResult->endpoint);
-        $this->assertSame('read', $readResult->metadata['route']);
-
-        $writeResult = $adapter->routeQuery('rw123', QueryType::Write);
-        $this->assertSame('10.0.1.10:5432', $writeResult->endpoint);
-        $this->assertSame('write', $writeResult->metadata['route']);
-
-        // Endpoints must be different
-        $this->assertNotSame($readResult->endpoint, $writeResult->endpoint);
-    }
-
-    /**
-     * @group integration
-     */
-    public function testReadWriteSplitDisabledUsesDefaultEndpoint(): void
-    {
-        $resolver = new EdgeMockReadWriteResolver();
-        $resolver->registerDatabase('rw456', [
-            'host' => '10.0.1.99',
-            'port' => 5432,
-            'username' => 'user',
-            'password' => 'pass',
-        ]);
-        $resolver->registerReadReplica('rw456', [
-            'host' => '10.0.1.20',
-            'port' => 5432,
-            'username' => 'replica_user',
-            'password' => 'replica_pass',
-        ]);
-
-        $adapter = new TCPAdapter($resolver, port: 5432);
-        // read/write split is disabled by default
-        $adapter->setSkipValidation(true);
-
-        $readResult = $adapter->routeQuery('rw456', QueryType::Read);
-        $this->assertSame('10.0.1.99:5432', $readResult->endpoint);
-    }
-
-    /**
-     * @group integration
-     */
-    public function testTransactionPinsReadsToPrimaryThroughFullFlow(): void
-    {
-        $resolver = new EdgeMockReadWriteResolver();
-        $resolver->registerDatabase('txdb', [
-            'host' => '10.0.1.10',
-            'port' => 5432,
-            'username' => 'user',
-            'password' => 'pass',
-        ]);
-        $resolver->registerReadReplica('txdb', [
-            'host' => '10.0.1.20',
-            'port' => 5432,
-            'username' => 'user',
-            'password' => 'pass',
-        ]);
-        $resolver->registerWritePrimary('txdb', [
-            'host' => '10.0.1.10',
-            'port' => 5432,
-            'username' => 'user',
-            'password' => 'pass',
-        ]);
-
-        $adapter = new TCPAdapter($resolver, port: 5432);
-        $adapter->setReadWriteSplit(true);
-        $adapter->setSkipValidation(true);
-
-        $clientFd = 42;
-
-        // Before transaction: SELECT goes to read replica
-        $selectData = $this->buildPgQuery('SELECT * FROM users');
-        $classification = $adapter->classify($selectData, $clientFd);
-        $this->assertSame(QueryType::Read, $classification);
-
-        $result = $adapter->routeQuery('txdb', $classification);
-        $this->assertSame('10.0.1.20:5432', $result->endpoint);
-
-        // BEGIN pins to primary
-        $beginData = $this->buildPgQuery('BEGIN');
-        $classification = $adapter->classify($beginData, $clientFd);
-        $this->assertSame(QueryType::Write, $classification);
-        $this->assertTrue($adapter->isPinned($clientFd));
-
-        // During transaction: SELECT goes to primary (pinned)
-        $classification = $adapter->classify($selectData, $clientFd);
-        $this->assertSame(QueryType::Write, $classification);
-
-        $result = $adapter->routeQuery('txdb', $classification);
-        $this->assertSame('10.0.1.10:5432', $result->endpoint);
-
-        // COMMIT unpins
-        $commitData = $this->buildPgQuery('COMMIT');
-        $adapter->classify($commitData, $clientFd);
-        $this->assertFalse($adapter->isPinned($clientFd));
-
-        // After transaction: SELECT goes back to read replica
-        $classification = $adapter->classify($selectData, $clientFd);
-        $this->assertSame(QueryType::Read, $classification);
-
-        $result = $adapter->routeQuery('txdb', $classification);
-        $this->assertSame('10.0.1.20:5432', $result->endpoint);
     }
 
     /**
@@ -594,13 +459,6 @@ class EdgeIntegrationTest extends TestCase
         $this->assertSame(1, $resolverStats['disconnects']);
     }
 
-    private function buildPgQuery(string $sql): string
-    {
-        $body = $sql . "\x00";
-        $length = \strlen($body) + 4;
-
-        return 'Q' . \pack('N', $length) . $body;
-    }
 }
 
 /**
@@ -733,84 +591,6 @@ class EdgeMockResolver implements Resolver
     public function getActivities(): array
     {
         return $this->activities;
-    }
-}
-
-/**
- * Extends EdgeMockResolver to support read/write split resolution.
- * In production, the Edge service would return different endpoints for
- * read replicas vs the primary writer.
- */
-class EdgeMockReadWriteResolver extends EdgeMockResolver implements ReadWriteResolver
-{
-    /** @var array<string, array{host: string, port: int, username: string, password: string}> */
-    protected array $readReplicas = [];
-
-    /** @var array<string, array{host: string, port: int, username: string, password: string}> */
-    protected array $writePrimaries = [];
-
-    /**
-     * @param array{host: string, port: int, username: string, password: string} $config
-     */
-    public function registerReadReplica(string $resourceId, array $config): self
-    {
-        $this->readReplicas[$resourceId] = $config;
-
-        return $this;
-    }
-
-    /**
-     * @param array{host: string, port: int, username: string, password: string} $config
-     */
-    public function registerWritePrimary(string $resourceId, array $config): self
-    {
-        $this->writePrimaries[$resourceId] = $config;
-
-        return $this;
-    }
-
-    public function resolveRead(string $resourceId): Result
-    {
-        if (!isset($this->readReplicas[$resourceId])) {
-            throw new ResolverException(
-                "Read replica not found: {$resourceId}",
-                ResolverException::NOT_FOUND,
-                ['resourceId' => $resourceId, 'route' => 'read']
-            );
-        }
-
-        $config = $this->readReplicas[$resourceId];
-
-        return new Result(
-            endpoint: "{$config['host']}:{$config['port']}",
-            metadata: [
-                'resourceId' => $resourceId,
-                'username' => $config['username'],
-                'route' => 'read',
-            ]
-        );
-    }
-
-    public function resolveWrite(string $resourceId): Result
-    {
-        if (!isset($this->writePrimaries[$resourceId])) {
-            throw new ResolverException(
-                "Write primary not found: {$resourceId}",
-                ResolverException::NOT_FOUND,
-                ['resourceId' => $resourceId, 'route' => 'write']
-            );
-        }
-
-        $config = $this->writePrimaries[$resourceId];
-
-        return new Result(
-            endpoint: "{$config['host']}:{$config['port']}",
-            metadata: [
-                'resourceId' => $resourceId,
-                'username' => $config['username'],
-                'route' => 'write',
-            ]
-        );
     }
 }
 

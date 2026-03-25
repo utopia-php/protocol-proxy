@@ -32,7 +32,6 @@ class Config
         public readonly int $recvBufferSize = 131072,
         public readonly float $connectTimeout = 5.0,
         public readonly bool $skipValidation = false,
-        public readonly bool $readWriteSplit = false,
         public readonly ?TLS $tls = null,
         public readonly ?\Closure $adapterFactory = null,
     ) {

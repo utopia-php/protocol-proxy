@@ -133,12 +133,6 @@ class ConfigTest extends TestCase
         $this->assertFalse($config->skipValidation);
     }
 
-    public function testDefaultReadWriteSplit(): void
-    {
-        $config = new Config();
-        $this->assertFalse($config->readWriteSplit);
-    }
-
     public function testDefaultTlsIsNull(): void
     {
         $config = new Config();
@@ -179,12 +173,6 @@ class ConfigTest extends TestCase
     {
         $config = new Config(skipValidation: true);
         $this->assertTrue($config->skipValidation);
-    }
-
-    public function testCustomReadWriteSplit(): void
-    {
-        $config = new Config(readWriteSplit: true);
-        $this->assertTrue($config->readWriteSplit);
     }
 
     public function testCustomLogConnections(): void

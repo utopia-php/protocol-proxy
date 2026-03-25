@@ -25,7 +25,6 @@ use PHPUnit\Framework\TestCase;
  *   PERF_DATABASE_ID             Resource ID for resolver (default: test-db)
  *   PERF_TARGET_CONN_RATE        Target connections/sec (default: 10000)
  *   PERF_MAX_CONNECTIONS          Max connections for exhaustion test (default: 10000)
- *   PERF_READ_WRITE_SPLIT_PORT   Port with read/write split enabled (default: 0, disabled)
  *
  * Architecture note:
  *   These tests connect to a running Swoole TCP proxy server via raw TCP sockets.
@@ -43,7 +42,6 @@ final class PerformanceTest extends TestCase
     private string $resourceId;
     private int $targetConnRate;
     private int $maxConnections;
-    private int $readWriteSplitPort;
 
     /**
      * Collected benchmark results for structured output.
@@ -102,7 +100,6 @@ final class PerformanceTest extends TestCase
         $this->resourceId = getenv('PERF_DATABASE_ID') ?: 'test-db';
         $this->targetConnRate = (int) (getenv('PERF_TARGET_CONN_RATE') ?: 10000);
         $this->maxConnections = (int) (getenv('PERF_MAX_CONNECTIONS') ?: 10000);
-        $this->readWriteSplitPort = (int) (getenv('PERF_READ_WRITE_SPLIT_PORT') ?: 0);
     }
 
     /**
@@ -276,7 +273,7 @@ final class PerformanceTest extends TestCase
      * after the current one goes down.
      *
      * Note: This test measures the client-side reconnection overhead, not the
-     * resolver/ReadWriteResolver failover itself (which depends on external state).
+     * resolver failover itself (which depends on external state).
      */
     public function testFailoverLatency(): void
     {
@@ -614,60 +611,6 @@ final class PerformanceTest extends TestCase
     }
 
     /**
-     * Compare query latency with and without read/write split enabled.
-     * Measures the overhead introduced by query classification.
-     */
-    public function testReadWriteSplitOverhead(): void
-    {
-        if ($this->readWriteSplitPort <= 0) {
-            $this->markTestSkipped(
-                'Read/write split test requires PERF_READ_WRITE_SPLIT_PORT to be set'
-            );
-        }
-
-        $queriesPerRun = min($this->iterations, 5000);
-
-        // Measure without read/write split (standard port)
-        self::log("Measuring latency without read/write split ({$queriesPerRun} queries)");
-
-        $standardLatencies = $this->benchmarkQueryLatency($this->host, $this->port, $queriesPerRun);
-
-        // Measure with read/write split
-        self::log("Measuring latency with read/write split ({$queriesPerRun} queries)");
-
-        $splitLatencies = $this->benchmarkQueryLatency($this->host, $this->readWriteSplitPort, $queriesPerRun);
-
-        if (empty($standardLatencies) || empty($splitLatencies)) {
-            $this->markTestSkipped('Could not collect latency samples for comparison');
-        }
-
-        $standardAvg = array_sum($standardLatencies) / count($standardLatencies);
-        $splitAvg = array_sum($splitLatencies) / count($splitLatencies);
-        $overheadUs = $splitAvg - $standardAvg;
-        $overheadPct = ($overheadUs / $standardAvg) * 100;
-
-        self::log(sprintf(
-            "Standard avg: %.2fus, Split avg: %.2fus, Overhead: %.2fus (%.1f%%)",
-            $standardAvg,
-            $splitAvg,
-            $overheadUs,
-            $overheadPct,
-        ));
-
-        $this->recordResult('rw_split_standard_avg', $standardAvg, 'us', null);
-        $this->recordResult('rw_split_split_avg', $splitAvg, 'us', null);
-        $this->recordResult('rw_split_overhead', $overheadUs, 'us', null);
-        $this->recordResult('rw_split_overhead_pct', $overheadPct, '%', null);
-
-        // The overhead should be minimal -- under 20% in most cases
-        $this->assertLessThan(
-            20.0,
-            $overheadPct,
-            sprintf('Read/write split overhead is %.1f%% which exceeds 20%%', $overheadPct),
-        );
-    }
-
-    /**
      * Build a PostgreSQL StartupMessage with the database name encoding the
      * database ID for the proxy resolver.
      *
@@ -770,58 +713,6 @@ final class PerformanceTest extends TestCase
         }
 
         return $data;
-    }
-
-    /**
-     * Benchmark query latency on a given host:port and return latency array in microseconds.
-     *
-     * @return array<int, float> Latencies in microseconds
-     */
-    private function benchmarkQueryLatency(string $host, int $port, int $count): array
-    {
-        $sock = @stream_socket_client(
-            "tcp://{$host}:{$port}",
-            $errno,
-            $errstr,
-            2.0,
-        );
-
-        if ($sock === false) {
-            return [];
-        }
-
-        stream_set_timeout($sock, 5);
-
-        // Send startup
-        $startupMsg = $this->buildStartupMessage($this->resourceId);
-        @fwrite($sock, $startupMsg);
-
-        // Read startup response
-        $this->readResponse($sock, 2.0);
-
-        // Warmup
-        for ($i = 0; $i < min(100, $count); $i++) {
-            $this->sendSimpleQuery($sock, 'SELECT 1');
-            $this->readResponse($sock, 1.0);
-        }
-
-        // Benchmark
-        $latencies = [];
-
-        for ($i = 0; $i < $count; $i++) {
-            $start = hrtime(true);
-            $this->sendSimpleQuery($sock, 'SELECT 1');
-            $response = $this->readResponse($sock, 2.0);
-            $elapsed = (hrtime(true) - $start) / 1e3; // microseconds
-
-            if ($response !== false && strlen($response) > 0) {
-                $latencies[] = $elapsed;
-            }
-        }
-
-        fclose($sock);
-
-        return $latencies;
     }
 
     /**
