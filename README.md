@@ -95,11 +95,11 @@ class MyResolver implements Resolver
         return new Result(endpoint: $backends[$resourceId]);
     }
 
-    public function onConnect(string $resourceId, array $metadata = []): void {}
-    public function onDisconnect(string $resourceId, array $metadata = []): void {}
     public function track(string $resourceId, array $metadata = []): void {}
     public function purge(string $resourceId): void {}
     public function getStats(): array { return []; }
+    public function onConnect(string $resourceId, array $metadata = []): void {}
+    public function onDisconnect(string $resourceId, array $metadata = []): void {}
 }
 ```
 
@@ -109,17 +109,18 @@ class MyResolver implements Resolver
 <?php
 require 'vendor/autoload.php';
 
+use Utopia\Proxy\Server\HTTP\Config;
 use Utopia\Proxy\Server\HTTP\Swoole as HTTPServer;
 
 $resolver = new MyResolver();
 
-$server = new HTTPServer(
-    $resolver,
+$config = new Config(
     host: '0.0.0.0',
     port: 80,
-    workers: swoole_cpu_num() * 2
+    workers: swoole_cpu_num() * 2,
 );
 
+$server = new HTTPServer($resolver, $config);
 $server->start();
 ```
 
@@ -154,17 +155,18 @@ The database protocol is determined by port: 5432 = PostgreSQL, 3306 = MySQL, 27
 <?php
 require 'vendor/autoload.php';
 
+use Utopia\Proxy\Server\SMTP\Config;
 use Utopia\Proxy\Server\SMTP\Swoole as SMTPServer;
 
 $resolver = new MyResolver();
 
-$server = new SMTPServer(
-    $resolver,
+$config = new Config(
     host: '0.0.0.0',
     port: 25,
-    workers: swoole_cpu_num() * 2
+    workers: swoole_cpu_num() * 2,
 );
 
+$server = new SMTPServer($resolver, $config);
 $server->start();
 ```
 
@@ -210,47 +212,65 @@ TLS can also be configured via environment variables:
 
 ## Configuration
 
+All servers use typed `Config` objects for configuration.
+
 ### HTTP Server
 
 ```php
 <?php
-$server = new HTTPServer($resolver, '0.0.0.0', 80, 16, [
+use Utopia\Proxy\Server\HTTP\Config;
+use Utopia\Proxy\Server\HTTP\Swoole as HTTPServer;
+
+$config = new Config(
+    host: '0.0.0.0',
+    port: 80,
+    workers: 16,
+
     // Performance
-    'max_connections' => 100_000,
-    'max_coroutine' => 100_000,
-    'socket_buffer_size' => 2 * 1024 * 1024,
-    'buffer_output_size' => 2 * 1024 * 1024,
-    'backend_pool_size' => 1024,
-    'backend_timeout' => 30,
-    'backend_keep_alive' => true,
+    maxConnections: 100_000,
+    maxCoroutine: 100_000,
+    socketBufferSize: 2 * 1024 * 1024,
+    bufferOutputSize: 2 * 1024 * 1024,
+    poolSize: 1024,
+    timeout: 30.0,
+    connectTimeout: 5.0,
+    keepAlive: true,
 
     // Behavior
-    'fast_path' => false,           // Minimal header processing
-    'fast_path_assume_ok' => false, // Skip status code forwarding
-    'fixed_backend' => null,        // Route all requests to static endpoint
-    'direct_response' => null,      // Return static response without forwarding
-    'raw_backend' => false,         // Use raw TCP for GET/HEAD (benchmark only)
-    'telemetry_headers' => true,    // Add X-Proxy-* response headers
-    'skip_validation' => false,     // Disable SSRF protection
+    fastPath: false,           // Minimal header processing
+    fastPathAssumeOk: false,   // Skip status code forwarding
+    fixedBackend: null,        // Route all requests to static endpoint
+    directResponse: null,      // Return static response without forwarding
+    rawBackend: false,         // Use raw TCP for GET/HEAD (benchmark only)
+    telemetry: true,           // Add X-Proxy-* response headers
+    skipValidation: false,     // Disable SSRF protection
 
     // Protocol
-    'open_http2_protocol' => false,
-    'http_keepalive_timeout' => 60,
-]);
+    http2Protocol: false,
+    keepaliveTimeout: 60,
+    cacheTTL: 60,
+);
+
+$server = new HTTPServer($resolver, $config);
 ```
 
 ### TCP Server
 
 ```php
 <?php
+use Utopia\Proxy\Server\TCP\Config;
+use Utopia\Proxy\Server\TCP\Swoole as TCPServer;
+
 $config = new Config(
     host: '0.0.0.0',
     ports: [5432, 3306, 27017],
     workers: 16,
     maxConnections: 200_000,
+    maxCoroutine: 200_000,
     socketBufferSize: 16 * 1024 * 1024,
     bufferOutputSize: 16 * 1024 * 1024,
     receiveBufferSize: 131_072,
+    timeout: 30.0,
     connectTimeout: 5.0,
     skipValidation: false,
     tls: null,
@@ -260,6 +280,30 @@ $config = new Config(
     tcpKeepinterval: 10,
     tcpKeepcount: 3,
 );
+
+$server = new TCPServer($resolver, $config);
+```
+
+### SMTP Server
+
+```php
+<?php
+use Utopia\Proxy\Server\SMTP\Config;
+use Utopia\Proxy\Server\SMTP\Swoole as SMTPServer;
+
+$config = new Config(
+    host: '0.0.0.0',
+    port: 25,
+    workers: 16,
+    maxConnections: 50_000,
+    maxCoroutine: 50_000,
+    timeout: 30.0,
+    connectTimeout: 5.0,
+    skipValidation: false,
+    cacheTTL: 60,
+);
+
+$server = new SMTPServer($resolver, $config);
 ```
 
 ### Environment Variables
@@ -378,6 +422,28 @@ enum Protocol: string
     case PostgreSQL = 'postgresql';
     case MySQL = 'mysql';
     case MongoDB = 'mongodb';
+    case Redis = 'redis';
+    case Memcached = 'memcached';
+    case Kafka = 'kafka';
+    case AMQP = 'amqp';
+    case ClickHouse = 'clickhouse';
+    case Cassandra = 'cassandra';
+    case NATS = 'nats';
+    case MSSQL = 'mssql';
+    case Oracle = 'oracle';
+    case Elasticsearch = 'elasticsearch';
+    case MQTT = 'mqtt';
+    case GRPC = 'grpc';
+    case ZooKeeper = 'zookeeper';
+    case Etcd = 'etcd';
+    case Neo4j = 'neo4j';
+    case Couchbase = 'couchbase';
+    case CockroachDB = 'cockroachdb';
+    case TiDB = 'tidb';
+    case Pulsar = 'pulsar';
+    case FTP = 'ftp';
+    case LDAP = 'ldap';
+    case RethinkDB = 'rethinkdb';
 }
 ```
 
@@ -389,11 +455,11 @@ The `Resolver` interface is the core abstraction point:
 interface Resolver
 {
     public function resolve(string $resourceId): Result;
-    public function onConnect(string $resourceId, array $metadata = []): void;
-    public function onDisconnect(string $resourceId, array $metadata = []): void;
     public function track(string $resourceId, array $metadata = []): void;
     public function purge(string $resourceId): void;
     public function getStats(): array;
+    public function onConnect(string $resourceId, array $metadata = []): void;
+    public function onDisconnect(string $resourceId, array $metadata = []): void;
 }
 ```
 
