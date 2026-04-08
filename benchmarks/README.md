@@ -29,7 +29,33 @@ BENCH_CONCURRENCY=5000 BENCH_REQUESTS=2000000 php benchmarks/http.php
 | `BENCH_KEEP_ALIVE` | `true` | Reuse connections |
 | `BENCH_TIMEOUT` | `10` | Request timeout (seconds) |
 
-## TCP Benchmark
+## TCP Benchmark (C client — preferred)
+
+The PHP bench client has its own per-process ceiling (~10-11k ops/sec) that
+caps measured throughput well below the proxy's actual capacity. For realistic
+numbers use the C load generator, which pins the proxy workers at 80-90% CPU:
+
+```bash
+composer bench:build                      # gcc -O2 -pthread -o benchmarks/tcpbench benchmarks/tcpbench.c
+
+# Request/response throughput (1 KB payloads)
+./benchmarks/tcpbench rr   -h 127.0.0.1 -p 5432 -c 200 -d 10 -s 1024
+
+# Connection rate
+./benchmarks/tcpbench rate -h 127.0.0.1 -p 5432 -c 200 -d 10
+
+# Bulk throughput (64 KB payloads)
+./benchmarks/tcpbench rr   -h 127.0.0.1 -p 5432 -c 200 -d 10 -s 65536
+```
+
+Flags: `-h host`, `-p port`, `-c concurrency`, `-d duration`, `-s payload_size`.
+Each thread owns one TCP connection, uses blocking IO, and counts ops via
+atomic counters. Modes: `rr` (persistent req/resp loop), `rate` (connect →
+handshake → close loop).
+
+## TCP Benchmark (PHP client — legacy)
+
+Functional testing only; numbers are latency-bound, not proxy-bound.
 
 ```bash
 # Connection rate (no payload)

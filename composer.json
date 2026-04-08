@@ -32,6 +32,7 @@
         }
     },
     "scripts": {
+        "bench:build": "gcc -O2 -pthread -o benchmarks/tcpbench benchmarks/tcpbench.c",
         "bench:http": "php benchmarks/http.php",
         "bench:tcp": "php benchmarks/tcp.php",
         "test": "phpunit --testsuite Unit",
