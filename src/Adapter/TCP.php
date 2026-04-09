@@ -6,6 +6,7 @@ use Swoole\Coroutine\Client;
 use Utopia\Proxy\Adapter;
 use Utopia\Proxy\Protocol;
 use Utopia\Proxy\Resolver;
+use Utopia\Proxy\Sockmap\Loader as Sockmap;
 
 /**
  * TCP Protocol Adapter
@@ -39,6 +40,9 @@ class TCP extends Adapter
     /** @var array<int, Client> */
     protected array $connections = [];
 
+    /** @var array<int, int> client fd => backend fd, for sockmap pairs handed to the kernel */
+    protected array $sockmapPairs = [];
+
     protected float $timeout = 30.0;
 
     protected float $connectTimeout = 5.0;
@@ -48,6 +52,8 @@ class TCP extends Adapter
     protected bool $tcpQuickAck = false;
 
     protected int $tcpNotsentLowat = 0;
+
+    protected ?Sockmap $sockmap = null;
 
     public function __construct(
         public int $port {
@@ -98,6 +104,30 @@ class TCP extends Adapter
         $this->tcpNotsentLowat = $bytes;
 
         return $this;
+    }
+
+    /**
+     * Attach a BPF sockmap loader. When set, getConnection() will hand
+     * the (client fd, backend fd) pair to the kernel after the backend
+     * dials, and the kernel forwards data between them with zero userspace
+     * involvement. The server code is expected to skip spawning its own
+     * forward coroutine when isSockmapActive() returns true for an fd.
+     */
+    public function setSockmap(?Sockmap $sockmap): static
+    {
+        $this->sockmap = $sockmap;
+
+        return $this;
+    }
+
+    /**
+     * Report whether the given client fd has been handed to the kernel
+     * via sockmap. Callers can use this to skip any userspace forwarding
+     * they would otherwise do — the kernel is already moving the bytes.
+     */
+    public function isSockmapActive(int $clientFd): bool
+    {
+        return isset($this->sockmapPairs[$clientFd]);
     }
 
     /**
@@ -171,6 +201,58 @@ class TCP extends Adapter
     }
 
     /**
+     * Hand the (client fd, backend fd) pair to the kernel via sockmap.
+     *
+     * Must be called AFTER the initial handshake packet has been written
+     * to the backend via $client->send(). Once the pair is in the map,
+     * every sendmsg() on either fd is redirected to the peer by the
+     * sk_msg program; a send to the backend after this point would be
+     * looped back to the client, so the initial handshake must happen
+     * while the backend socket is still in "plain TCP" mode.
+     *
+     * Returns true if the kernel took ownership of forwarding for this
+     * pair; callers should skip any userspace forward loop in that case.
+     */
+    public function activateSockmap(int $clientFd): bool
+    {
+        if ($this->sockmap === null || !$this->sockmap->isAvailable()) {
+            return false;
+        }
+        $client = $this->connections[$clientFd] ?? null;
+        if ($client === null) {
+            return false;
+        }
+        $backendFd = $this->backendFd($client);
+        if ($backendFd <= 0) {
+            return false;
+        }
+        if (!$this->sockmap->insertPair($clientFd, $backendFd)) {
+            return false;
+        }
+        $this->sockmapPairs[$clientFd] = $backendFd;
+
+        return true;
+    }
+
+    /**
+     * Resolve the raw kernel fd of the backend connection so we can hand
+     * it to the sockmap. Returns -1 if unavailable (non-Linux, TLS, etc).
+     */
+    private function backendFd(Client $client): int
+    {
+        if (\PHP_OS_FAMILY !== 'Linux') {
+            return -1;
+        }
+        $socket = $client->exportSocket();
+        if (!$socket instanceof \Swoole\Coroutine\Socket) {
+            return -1;
+        }
+        $fd = $socket->fd;
+
+        return \is_int($fd) && $fd > 0 ? $fd : -1;
+    }
+
+    /**
      * Close backend connection for a client.
      */
     public function closeConnection(int $fd): void
@@ -178,6 +260,13 @@ class TCP extends Adapter
         $client = $this->connections[$fd] ?? null;
         if ($client === null) {
             return;
+        }
+
+        // Pull the pair out of the sockmap first so the kernel stops
+        // redirecting messages through the (about-to-close) fds.
+        if (isset($this->sockmapPairs[$fd])) {
+            $this->sockmap?->removePair($fd, $this->sockmapPairs[$fd]);
+            unset($this->sockmapPairs[$fd]);
         }
 
         unset($this->connections[$fd]);

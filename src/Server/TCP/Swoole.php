@@ -13,6 +13,7 @@ use Utopia\Console;
 use Utopia\Proxy\Adapter\TCP as TCPAdapter;
 use Utopia\Proxy\Dns;
 use Utopia\Proxy\Resolver;
+use Utopia\Proxy\Sockmap\Loader as Sockmap;
 
 /**
  * High-performance TCP proxy server (Swoole Implementation)
@@ -47,6 +48,8 @@ class Swoole
     protected array $adapters = [];
 
     protected Config $config;
+
+    protected ?Sockmap $sockmap = null;
 
     protected ?TLSContext $tlsContext = null;
 
@@ -237,6 +240,20 @@ class Swoole
 
         Dns::setTtl($this->config->dnsCacheTtl);
 
+        // Load the BPF sockmap once per worker. If the object file is missing,
+        // libbpf isn't installed, or the kernel rejects the load (no CAP_BPF,
+        // BPF disabled), we continue without zero-copy relay and fall through
+        // to the existing userspace forward() path.
+        if ($this->config->sockmapEnabled && $this->config->sockmapBpfObject !== '') {
+            $loader = new Sockmap($this->config->sockmapBpfObject);
+            if ($loader->load()) {
+                $this->sockmap = $loader;
+                Console::log('Sockmap: enabled (kernel zero-copy relay)');
+            } else {
+                Console::log('Sockmap: unavailable ('.$loader->lastError().')');
+            }
+        }
+
         foreach ($this->config->ports as $port) {
             if ($this->config->adapterFactory !== null) {
                 /** @var TCPAdapter $adapter */
@@ -258,7 +275,8 @@ class Swoole
                 ->setConnectTimeout($this->config->connectTimeout)
                 ->setTcpUserTimeout($this->config->tcpUserTimeoutMs)
                 ->setTcpQuickAck($this->config->tcpQuickAck)
-                ->setTcpNotsentLowat($this->config->tcpNotsentLowat);
+                ->setTcpNotsentLowat($this->config->tcpNotsentLowat)
+                ->setSockmap($this->sockmap);
 
             $this->adapters[$port] = $adapter;
         }
@@ -277,13 +295,21 @@ class Swoole
     {
         $connection = $this->connections[$fd] ?? null;
 
-        // Fast path: existing connection - forward to appropriate backend
+        // Fast path: existing connection - forward to appropriate backend.
+        // When sockmap is active for this fd the kernel has already handled
+        // the data before we ever saw it — onReceive shouldn't even fire —
+        // but keep a defensive pass-through in case the verifier serves up
+        // a packet that bypassed the redirect (e.g. partial tear-down).
         if ($connection !== null && $connection->backend !== null) {
             $adapter = $this->adapters[$connection->port] ?? null;
             if ($adapter !== null) {
                 $resourceId = (string) $fd;
                 $adapter->recordBytes($resourceId, \strlen($data), 0);
                 $adapter->track($resourceId);
+
+                if ($adapter->isSockmapActive($fd)) {
+                    return;
+                }
             }
 
             if ($connection->backend->send($data) === false) {
@@ -323,11 +349,20 @@ class Swoole
             $resourceId = (string) $fd;
             $adapter->notifyConnect($resourceId);
 
-            // Forward initial data to primary
+            // Forward initial handshake data to backend BEFORE activating
+            // sockmap — once the pair is in the map, any send() on the
+            // backend fd would be redirected back to the client by the
+            // sk_msg program.
             $backend->send($data);
             $adapter->recordBytes($resourceId, \strlen($data), 0);
 
-            $this->forward($server, $fd, $backend, $adapter);
+            // Activate kernel zero-copy relay. If successful the kernel
+            // handles all subsequent bytes and we skip the userspace
+            // forward loop entirely. Otherwise fall back to the coroutine
+            // path as before.
+            if (!$adapter->activateSockmap($fd)) {
+                $this->forward($server, $fd, $backend, $adapter);
+            }
 
         } catch (\Exception $e) {
             Console::error("Error handling data from #{$fd}: {$e->getMessage()}");

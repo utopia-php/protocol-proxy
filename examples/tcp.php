@@ -120,6 +120,9 @@ if ($ports === []) {
     $ports = [5432, 3306];
 }
 
+$sockmapEnabled = $envBool('TCP_SOCKMAP_ENABLED', false);
+$sockmapBpfObject = getenv('TCP_SOCKMAP_BPF_OBJECT') ?: '';
+
 $config = new TCPConfig(
     host: '0.0.0.0',
     ports: $ports,
@@ -127,6 +130,8 @@ $config = new TCPConfig(
     reactorNum: $reactorNum,
     serverMode: $serverMode,
     skipValidation: $skipValidation,
+    sockmapEnabled: $sockmapEnabled,
+    sockmapBpfObject: $sockmapBpfObject,
     tls: $tls,
 );
 

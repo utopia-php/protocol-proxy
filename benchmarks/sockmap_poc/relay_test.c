@@ -57,10 +57,23 @@ static uint64_t now_ns(void)
     return (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
 }
 
-// Struct matching peer_val in the BPF program.
-struct peer_val {
-    uint32_t idx;
-};
+// Build a 64-bit tuple key matching the BPF program's tuple_key().
+// sin_port comes out of getsockname() in network byte order; we keep the
+// raw 16 bits to match the BPF program's view of skb->remote_port. The
+// local port is stored by the kernel in host byte order, so we ntohs()
+// the local side to match.
+static uint64_t tuple_key(int fd)
+{
+    struct sockaddr_in local, peer;
+    socklen_t slen = sizeof(local);
+    if (getsockname(fd, (struct sockaddr *)&local, &slen) < 0) return 0;
+    slen = sizeof(peer);
+    if (getpeername(fd, (struct sockaddr *)&peer, &slen) < 0) return 0;
+    uint64_t k = (uint64_t)ntohs(local.sin_port);
+    k = (k << 16) | (uint64_t)(peer.sin_port & 0xffff);
+    k = (k << 32) | (uint64_t)peer.sin_addr.s_addr;
+    return k;
+}
 
 // Set TCP_NODELAY and make the socket non-blocking for write tests.
 static void tune(int fd)
@@ -136,6 +149,8 @@ static void *reader_thread(void *p)
 
 int main(int argc, char **argv)
 {
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
     long long target_bytes = 1024LL * 1024LL * 1024LL; // default 1 GiB
     int opt;
     while ((opt = getopt(argc, argv, "n:")) != -1) {
@@ -163,63 +178,72 @@ int main(int argc, char **argv)
     if (!map_peers) { fprintf(stderr, "map `peers` not found\n"); return 1; }
     int peers_fd = bpf_map__fd(map_peers);
 
-    struct bpf_map *map_peer_idx = bpf_object__find_map_by_name(obj, "peer_idx");
-    if (!map_peer_idx) { fprintf(stderr, "map `peer_idx` not found\n"); return 1; }
-    int peer_idx_fd = bpf_map__fd(map_peer_idx);
-
     int prog_fd = bpf_program__fd(prog);
 
-    // Attach the sk_msg program to the sockmap so it runs on every
-    // sendmsg against a socket stored in that map.
-    if (bpf_prog_attach(prog_fd, peers_fd, BPF_SK_MSG_VERDICT, 0) < 0) {
+    // Attach the sk_skb/stream_verdict program to the sockmap so it
+    // runs on every incoming skb arriving on a socket stored in the map.
+    if (bpf_prog_attach(prog_fd, peers_fd, BPF_SK_SKB_STREAM_VERDICT, 0) < 0) {
         fprintf(stderr, "bpf_prog_attach: %s\n", strerror(errno));
         return 1;
     }
 
-    // ---- Set up two TCP pairs (the "client side" and "backend side"
-    // of a proxy connection).  pair_a[0] is our "client fd"; pair_b[0]
-    // is our "backend fd". We relay between them via the kernel. ----
+    // ---- Topology ----
+    //
+    //   external_client  (pair_a[0])  ==TCP==>  proxy_accept   (pair_a[1])
+    //                                                │
+    //                                                │ relayed via kernel
+    //                                                │ by stream_verdict
+    //                                                ▼
+    //   proxy_backend   (pair_b[0])  ==TCP==>  external_backend (pair_b[1])
+    //
+    //   The sockmap contains proxy_accept and proxy_backend. When data
+    //   arrives AT proxy_accept from external_client, stream_verdict
+    //   runs, looks up proxy_accept's peer (proxy_backend), and
+    //   redirects the skb into proxy_backend's egress path. The TCP
+    //   stack then sends it over to external_backend.
     int pair_a[2], pair_b[2];
     if (make_pair(pair_a) < 0) { perror("make_pair a"); return 1; }
     if (make_pair(pair_b) < 0) { perror("make_pair b"); return 1; }
 
-    int client_fd  = pair_a[0]; // data sender (writer) in throughput test
-    int client_srv = pair_a[1]; // loopback-server-side counterpart (unused)
-    int backend_fd = pair_b[0]; // target of the relay
-    int backend_srv = pair_b[1]; // loopback-server-side counterpart
-    (void)client_srv; (void)backend_srv;
+    int external_client   = pair_a[0]; // outside writer
+    int proxy_accept      = pair_a[1]; // proxy's accepted client end
+    int proxy_backend     = pair_b[0]; // proxy's backend-dialed end
+    int external_backend  = pair_b[1]; // outside reader (echo server stand-in)
+    int client_fd  = external_client;  // alias used by the old test body
+    int backend_fd = external_backend; // alias used by the old test body
+    (void)proxy_backend;
 
-    // Insert both sockets into the sockmap at known indices.
-    //   index 0 = client side
-    //   index 1 = backend side
-    // bpf_map_update_elem on a SOCKMAP expects the value to be a pointer
-    // to an int holding the fd to store.
-    uint32_t k0 = 0, k1 = 1;
-    if (bpf_map_update_elem(peers_fd, &k0, &client_fd, BPF_ANY) < 0) {
-        fprintf(stderr, "peers[0]=client_fd: %s\n", strerror(errno));
-        return 1;
-    }
-    if (bpf_map_update_elem(peers_fd, &k1, &backend_fd, BPF_ANY) < 0) {
-        fprintf(stderr, "peers[1]=backend_fd: %s\n", strerror(errno));
-        return 1;
-    }
+    // Insert the TWO proxy-side sockets into the sockmap, each under
+    // its OWN 4-tuple key. Values are the PEER's fd (the other proxy
+    // socket).
+    //
+    // When a TCP segment arrives at proxy_accept (from external_client),
+    // stream_verdict runs. It computes proxy_accept's 4-tuple, looks up
+    // peers[that tuple], gets proxy_backend's fd, and calls
+    // bpf_sk_redirect_hash() to forward the segment via proxy_backend's
+    // egress — which the kernel TCP stack delivers to external_backend.
+    //
+    // Reverse direction works the same: a segment arriving at
+    // proxy_backend (from external_backend) gets redirected to
+    // proxy_accept and delivered to external_client.
+    uint64_t key_accept  = tuple_key(proxy_accept);
+    uint64_t key_backend = tuple_key(proxy_backend);
+    if (!key_accept || !key_backend) { perror("tuple_key"); return 1; }
 
-    // Seed each socket's sk_storage with the PEER's index. sk_msg reads
-    // this at dispatch time to know where to redirect.
-    struct peer_val client_peer  = { .idx = 1 };
-    struct peer_val backend_peer = { .idx = 0 };
-    if (bpf_map_update_elem(peer_idx_fd, &client_fd, &client_peer, BPF_ANY) < 0) {
-        fprintf(stderr, "peer_idx[client]: %s\n", strerror(errno));
+    if (bpf_map_update_elem(peers_fd, &key_accept, &proxy_backend, BPF_ANY) < 0) {
+        fprintf(stderr, "peers[accept tuple]=proxy_backend: %s\n", strerror(errno));
         return 1;
     }
-    if (bpf_map_update_elem(peer_idx_fd, &backend_fd, &backend_peer, BPF_ANY) < 0) {
-        fprintf(stderr, "peer_idx[backend]: %s\n", strerror(errno));
+    if (bpf_map_update_elem(peers_fd, &key_backend, &proxy_accept, BPF_ANY) < 0) {
+        fprintf(stderr, "peers[backend tuple]=proxy_accept: %s\n", strerror(errno));
         return 1;
     }
 
     printf("sockmap wired up:\n");
-    printf("  peers[0]=client_fd=%d peer_idx=1 -> backend\n", client_fd);
-    printf("  peers[1]=backend_fd=%d peer_idx=0 -> client\n", backend_fd);
+    printf("  peers[proxy_accept  tuple=0x%016llx] -> proxy_backend (fd=%d)\n",
+           (unsigned long long)key_accept, proxy_backend);
+    printf("  peers[proxy_backend tuple=0x%016llx] -> proxy_accept  (fd=%d)\n",
+           (unsigned long long)key_backend, proxy_accept);
 
     // ---- Correctness test ----
     // Write a magic sequence to client_fd, read it from backend_fd.

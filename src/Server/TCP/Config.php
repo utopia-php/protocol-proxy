@@ -40,6 +40,8 @@ class Config
         public readonly int $gcIntervalMs = 5_000,
         public readonly int $dnsCacheTtl = 60,
         public readonly int $tcpNotsentLowat = 16_384,
+        public readonly bool $sockmapEnabled = false,
+        public readonly string $sockmapBpfObject = '',
         public readonly float $timeout = 30.0,
         public readonly float $connectTimeout = 5.0,
         public readonly bool $skipValidation = false,
