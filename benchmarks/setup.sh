@@ -88,6 +88,19 @@ sysctl -w net.ipv4.tcp_mem="$TCP_MEM" >/dev/null
 # Defeat SYN flood without hurting legit clients
 sysctl -w net.ipv4.tcp_syncookies=1 >/dev/null
 
+# Bypass conntrack for proxy ports — eliminates ~2.5% overhead from
+# nf_conntrack lookups on every packet. Proxy traffic doesn't need NAT
+# or stateful firewall tracking.
+if command -v iptables >/dev/null 2>&1; then
+    for port in 5432 3306 25432 8080 25 15432; do
+        iptables -t raw -C PREROUTING -p tcp --dport "$port" -j NOTRACK 2>/dev/null || \
+            iptables -t raw -A PREROUTING -p tcp --dport "$port" -j NOTRACK
+        iptables -t raw -C OUTPUT -p tcp --sport "$port" -j NOTRACK 2>/dev/null || \
+            iptables -t raw -A OUTPUT -p tcp --sport "$port" -j NOTRACK
+    done
+    echo "Conntrack bypass: enabled for proxy ports"
+fi
+
 # VM tuning for long-lived worker processes
 sysctl -w vm.max_map_count=262144 >/dev/null
 sysctl -w vm.swappiness=10 >/dev/null

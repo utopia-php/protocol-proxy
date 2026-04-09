@@ -1,118 +1,65 @@
+# Dev compose for the utopia-php/proxy.
+#
+# Quick start:
+#
+#   docker compose up --build              # HTTP proxy on :8080
+#   docker compose up --build tcp-proxy    # TCP proxy on :5432/:3306
+#   docker compose up --build smtp-proxy   # SMTP proxy on :25
+#
+# Custom resolver (mount a PHP file that returns a Resolver instance):
+#
+#   docker compose run -v ./resolver.php:/etc/utopia-proxy/resolver.php http-proxy
+#
+# Environment overrides (defaults in .env or inline):
+#
+#   HTTP_BACKEND_ENDPOINT=10.0.0.2:5678 docker compose up http-proxy
+#   TCP_BACKEND_ENDPOINT=10.0.0.2:5432  docker compose up tcp-proxy
+
 services:
-
-  mariadb:
-    image: mariadb:11.2
-    container_name: proxy-mariadb
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: appwrite
-      MYSQL_USER: appwrite
-      MYSQL_PASSWORD: password
-    ports:
-      - "${MARIADB_PORT:-3306}:3306"
-    volumes:
-      - mariadb_data:/var/lib/mysql
-    networks:
-      - proxy
-    healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    container_name: proxy-redis
-    restart: unless-stopped
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - proxy
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   http-proxy:
     build: .
-    container_name: proxy-http
-    restart: unless-stopped
+    container_name: utopia-http-proxy
     ports:
-      - "${HTTP_PROXY_PORT:-8080}:8080"
+      - "${HTTP_PORT:-8080}:8080"
     environment:
-      DB_HOST: mariadb
-      DB_PORT: 3306
-      DB_USER: appwrite
-      DB_PASS: password
-      DB_NAME: appwrite
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      COMPUTE_API_URL: http://appwrite/v1/compute
-      COMPUTE_API_KEY: ""
-    depends_on:
-      mariadb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - proxy
-    command: php examples/http.php
+      HTTP_BACKEND_ENDPOINT: "${HTTP_BACKEND_ENDPOINT:-host.docker.internal:5678}"
+      HTTP_WORKERS: "${HTTP_WORKERS:-4}"
+      HTTP_SKIP_VALIDATION: "1"
+    restart: unless-stopped
 
   tcp-proxy:
     build: .
-    container_name: proxy-tcp
-    restart: unless-stopped
-    ports:
-      - "${TCP_POSTGRES_PORT:-5432}:5432"
-      - "${TCP_MYSQL_PORT:-3306}:3306"
+    container_name: utopia-tcp-proxy
+    network_mode: host
+    cap_add:
+      - BPF
+      - NET_ADMIN
+      - SYS_RESOURCE
+      - IPC_LOCK
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
+      memlock: -1
     environment:
-      DB_HOST: mariadb
-      DB_PORT: 3306
-      DB_USER: appwrite
-      DB_PASS: password
-      DB_NAME: appwrite
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-    depends_on:
-      mariadb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - proxy
-    command: php examples/tcp.php
+      TCP_BACKEND_ENDPOINT: "${TCP_BACKEND_ENDPOINT:-127.0.0.1:15432}"
+      TCP_POSTGRES_PORT: "${TCP_POSTGRES_PORT:-5432}"
+      TCP_MYSQL_PORT: "${TCP_MYSQL_PORT:-3306}"
+      TCP_WORKERS: "${TCP_WORKERS:-4}"
+      TCP_SKIP_VALIDATION: "1"
+      TCP_SOCKMAP_ENABLED: "${TCP_SOCKMAP_ENABLED:-0}"
+      TCP_SOCKMAP_BPF_OBJECT: "/opt/proxy/relay.bpf.o"
+    restart: unless-stopped
+    command: ["tcp"]
 
   smtp-proxy:
     build: .
-    container_name: proxy-smtp
-    restart: unless-stopped
+    container_name: utopia-smtp-proxy
     ports:
-      - "${SMTP_PROXY_PORT:-8025}:25"
+      - "${SMTP_PORT:-25}:25"
     environment:
-      DB_HOST: mariadb
-      DB_PORT: 3306
-      DB_USER: appwrite
-      DB_PASS: password
-      DB_NAME: appwrite
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-    depends_on:
-      mariadb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - proxy
-    command: php examples/smtp.php
-
-networks:
-  proxy:
-    driver: bridge
-
-volumes:
-  mariadb_data:
-  redis_data:
+      SMTP_BACKEND_ENDPOINT: "${SMTP_BACKEND_ENDPOINT:-host.docker.internal:1025}"
+      SMTP_SKIP_VALIDATION: "1"
+    restart: unless-stopped
+    command: ["smtp"]
