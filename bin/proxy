@@ -1,0 +1,200 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * Utopia Proxy — container entrypoint.
+ *
+ * Usage:
+ *   php bin/proxy tcp          # start TCP proxy
+ *   php bin/proxy http         # start HTTP proxy
+ *   php bin/proxy smtp         # start SMTP proxy
+ *
+ * Resolver loading:
+ *   Mount a PHP file that returns a Resolver instance:
+ *
+ *   docker run --network=host \
+ *     -v ./resolver.php:/etc/utopia-proxy/resolver.php:ro \
+ *     utopia/proxy tcp
+ *
+ *   The file is loaded via require and must return an instance of
+ *   Utopia\Proxy\Resolver. If /app/vendor/autoload.php exists it is
+ *   loaded first so the resolver can use its own Composer dependencies.
+ *
+ *   Without a mounted resolver the proxy falls back to a Fixed resolver
+ *   using the *_BACKEND_ENDPOINT env var for the chosen protocol.
+ */
+
+// Library autoloader
+require __DIR__ . '/../vendor/autoload.php';
+
+// User-mounted autoloader — lets the resolver use its own deps
+if (file_exists('/app/vendor/autoload.php')) {
+    require '/app/vendor/autoload.php';
+}
+
+use Utopia\Proxy\Resolver;
+use Utopia\Proxy\Resolver\Fixed;
+use Utopia\Proxy\Server\HTTP\Config as HTTPConfig;
+use Utopia\Proxy\Server\HTTP\Swoole as HTTPServer;
+use Utopia\Proxy\Server\HTTP\Swoole\Coroutine as HTTPCoroutineServer;
+use Utopia\Proxy\Server\SMTP\Config as SMTPConfig;
+use Utopia\Proxy\Server\SMTP\Swoole as SMTPServer;
+use Utopia\Proxy\Server\TCP\Config as TCPConfig;
+use Utopia\Proxy\Server\TCP\Swoole as TCPServer;
+use Utopia\Proxy\Server\TCP\Swoole\Coroutine as TCPCoroutineServer;
+use Utopia\Proxy\Server\TCP\TLS;
+
+$protocol = strtolower($argv[1] ?? getenv('PROXY_PROTOCOL') ?: 'tcp');
+if (! in_array($protocol, ['tcp', 'http', 'smtp'], true)) {
+    fprintf(STDERR, "Unknown protocol: %s (expected tcp, http, or smtp)\n", $protocol);
+    exit(1);
+}
+
+$envInt = static function (string $key, int $default): int {
+    $value = getenv($key);
+
+    return $value === false ? $default : (int) $value;
+};
+
+$envBool = static function (string $key, bool $default): bool {
+    $value = getenv($key);
+
+    return $value === false ? $default : filter_var($value, FILTER_VALIDATE_BOOLEAN);
+};
+
+$resolverPath = getenv('PROXY_RESOLVER') ?: '/etc/utopia-proxy/resolver.php';
+
+if (file_exists($resolverPath)) {
+    $resolver = require $resolverPath;
+    if (! $resolver instanceof Resolver) {
+        fprintf(STDERR, "ERROR: %s must return a Resolver instance\n", $resolverPath);
+        exit(1);
+    }
+    echo "Resolver: {$resolverPath}\n";
+} else {
+    $endpointEnv = match ($protocol) {
+        'tcp' => 'TCP_BACKEND_ENDPOINT',
+        'http' => 'HTTP_BACKEND_ENDPOINT',
+        'smtp' => 'SMTP_BACKEND_ENDPOINT',
+    };
+    $endpointDefault = match ($protocol) {
+        'tcp' => '127.0.0.1:5432',
+        'http' => '127.0.0.1:5678',
+        'smtp' => '127.0.0.1:1025',
+    };
+    $endpoint = getenv($endpointEnv) ?: $endpointDefault;
+    $resolver = new Fixed($endpoint);
+    echo "Resolver: fixed ({$endpoint})\n";
+}
+
+match ($protocol) {
+    'tcp' => startTcp($resolver, $envInt, $envBool),
+    'http' => startHttp($resolver, $envInt, $envBool),
+    'smtp' => startSmtp($resolver, $envInt, $envBool),
+};
+
+function startTcp(Resolver $resolver, \Closure $envInt, \Closure $envBool): void
+{
+    $impl = strtolower(getenv('TCP_SERVER_IMPL') ?: 'swoole');
+    if (! in_array($impl, ['swoole', 'coroutine', 'coro'], true)) {
+        $impl = 'swoole';
+    }
+    if ($impl === 'coro') {
+        $impl = 'coroutine';
+    }
+
+    $postgresPort = $envInt('TCP_POSTGRES_PORT', 5432);
+    $mysqlPort = $envInt('TCP_MYSQL_PORT', 3306);
+    $ports = array_values(array_filter([$postgresPort, $mysqlPort], static fn (int $port): bool => $port > 0));
+    if ($ports === []) {
+        $ports = [5432, 3306];
+    }
+
+    $tls = null;
+    if ($envBool('PROXY_TLS_ENABLED', false)) {
+        $certificate = getenv('PROXY_TLS_CERT') ?: '';
+        $key = getenv('PROXY_TLS_KEY') ?: '';
+        if ($certificate === '' || $key === '') {
+            fprintf(STDERR, "ERROR: PROXY_TLS_ENABLED=true but PROXY_TLS_CERT and PROXY_TLS_KEY are required\n");
+            exit(1);
+        }
+        $tls = new TLS(
+            certificate: $certificate,
+            key: $key,
+            ca: getenv('PROXY_TLS_CA') ?: '',
+            requireClientCert: $envBool('PROXY_TLS_REQUIRE_CLIENT_CERT', false),
+        );
+    }
+
+    $config = new TCPConfig(
+        ports: $ports,
+        workers: $envInt('TCP_WORKERS', swoole_cpu_num()),
+        reactorNum: $envInt('TCP_REACTOR_NUM', swoole_cpu_num()),
+        serverMode: strtolower(getenv('TCP_SERVER_MODE') ?: 'base') === 'process' ? SWOOLE_PROCESS : SWOOLE_BASE,
+        skipValidation: $envBool('TCP_SKIP_VALIDATION', false),
+        sockmapEnabled: $envBool('TCP_SOCKMAP_ENABLED', false),
+        sockmapBpfObject: getenv('TCP_SOCKMAP_BPF_OBJECT') ?: '',
+        tls: $tls,
+    );
+
+    echo "Protocol: TCP\n";
+    echo 'Ports: ' . implode(', ', $config->ports) . "\n";
+    echo "Workers: {$config->workers}\n";
+    echo "Impl: {$impl}\n";
+    if ($tls !== null) {
+        echo "TLS: enabled\n";
+    }
+    echo "\n";
+
+    $class = $impl === 'swoole' ? TCPServer::class : TCPCoroutineServer::class;
+    (new $class($resolver, $config))->start();
+}
+
+function startHttp(Resolver $resolver, \Closure $envInt, \Closure $envBool): void
+{
+    $impl = strtolower(getenv('HTTP_SERVER_IMPL') ?: 'swoole');
+    if (! in_array($impl, ['swoole', 'coroutine', 'coro'], true)) {
+        $impl = 'swoole';
+    }
+    if ($impl === 'coro') {
+        $impl = 'coroutine';
+    }
+
+    $config = new HTTPConfig(
+        port: $envInt('HTTP_PORT', 8080),
+        workers: $envInt('HTTP_WORKERS', swoole_cpu_num() * 2),
+        reactorNum: $envInt('HTTP_REACTOR_NUM', swoole_cpu_num() * 2),
+        serverMode: strtolower(getenv('HTTP_SERVER_MODE') ?: 'process') === 'base' ? SWOOLE_BASE : SWOOLE_PROCESS,
+        poolSize: $envInt('HTTP_BACKEND_POOL_SIZE', 2048),
+        keepaliveTimeout: $envInt('HTTP_KEEPALIVE_TIMEOUT', 60),
+        http2Protocol: $envBool('HTTP_OPEN_HTTP2', false),
+        skipValidation: $envBool('HTTP_SKIP_VALIDATION', false),
+        fastPath: $envBool('HTTP_FAST_PATH', true),
+        rawBackend: $envBool('HTTP_RAW_BACKEND', false),
+    );
+
+    echo "Protocol: HTTP\n";
+    echo "Port: {$config->port}\n";
+    echo "Workers: {$config->workers}\n";
+    echo "Impl: {$impl}\n";
+    echo "\n";
+
+    $class = $impl === 'swoole' ? HTTPServer::class : HTTPCoroutineServer::class;
+    (new $class($resolver, $config))->start();
+}
+
+function startSmtp(Resolver $resolver, \Closure $envInt, \Closure $envBool): void
+{
+    $config = new SMTPConfig(
+        port: $envInt('SMTP_PORT', 25),
+        workers: $envInt('SMTP_WORKERS', swoole_cpu_num() * 2),
+        skipValidation: $envBool('SMTP_SKIP_VALIDATION', false),
+    );
+
+    echo "Protocol: SMTP\n";
+    echo "Port: {$config->port}\n";
+    echo "Workers: {$config->workers}\n";
+    echo "\n";
+
+    (new SMTPServer($resolver, $config))->start();
+}

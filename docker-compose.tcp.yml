@@ -1,0 +1,48 @@
+# Minimal compose for the TCP proxy with optional BPF sockmap zero-copy
+# relay. Uses host networking so sockmap can attach to real kernel
+# sockets and SO_REUSEPORT shards across workers on the host's real
+# NIC / loopback stack.
+#
+# Usage:
+#
+#   # Fixed backend, userspace relay:
+#   TCP_BACKEND_ENDPOINT=10.0.0.2:5432 \
+#     docker compose -f docker-compose.tcp.yml up --build
+#
+#   # With sockmap zero-copy:
+#   TCP_SOCKMAP_ENABLED=1 \
+#   TCP_BACKEND_ENDPOINT=10.0.0.2:5432 \
+#     docker compose -f docker-compose.tcp.yml up --build
+#
+#   # Custom resolver:
+#   docker compose -f docker-compose.tcp.yml \
+#     run -v ./resolver.php:/etc/utopia-proxy/resolver.php:ro tcp-proxy
+
+services:
+
+  tcp-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: utopia-tcp-proxy
+    network_mode: host
+    cap_add:
+      - BPF
+      - NET_ADMIN
+      - SYS_RESOURCE
+      - IPC_LOCK
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
+      memlock: -1
+    environment:
+      TCP_BACKEND_ENDPOINT: "${TCP_BACKEND_ENDPOINT:-127.0.0.1:15432}"
+      TCP_POSTGRES_PORT: "${TCP_POSTGRES_PORT:-25432}"
+      TCP_MYSQL_PORT: "${TCP_MYSQL_PORT:-0}"
+      TCP_WORKERS: "${TCP_WORKERS:-8}"
+      TCP_REACTOR_NUM: "${TCP_REACTOR_NUM:-8}"
+      TCP_SKIP_VALIDATION: "${TCP_SKIP_VALIDATION:-1}"
+      TCP_SOCKMAP_ENABLED: "${TCP_SOCKMAP_ENABLED:-0}"
+      TCP_SOCKMAP_BPF_OBJECT: "/opt/proxy/relay.bpf.o"
+    restart: unless-stopped

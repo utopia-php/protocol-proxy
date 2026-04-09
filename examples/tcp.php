@@ -2,8 +2,7 @@
 
 require __DIR__.'/../vendor/autoload.php';
 
-use Utopia\Proxy\Resolver;
-use Utopia\Proxy\Resolver\Result;
+use Utopia\Proxy\Resolver\Fixed;
 use Utopia\Proxy\Server\TCP\Config as TCPConfig;
 use Utopia\Proxy\Server\TCP\Swoole as TCPServer;
 use Utopia\Proxy\Server\TCP\Swoole\Coroutine as TCPCoroutineServer;
@@ -80,38 +79,7 @@ if ($tlsEnabled) {
     );
 }
 
-// Create a simple resolver that returns the configured backend endpoint
-$resolver = new class ($backendEndpoint) implements Resolver {
-    public function __construct(private string $endpoint)
-    {
-    }
-
-    public function resolve(string $resourceId): Result
-    {
-        return new Result(endpoint: $this->endpoint);
-    }
-
-    public function onConnect(string $resourceId, array $metadata = []): void
-    {
-    }
-
-    public function onDisconnect(string $resourceId, array $metadata = []): void
-    {
-    }
-
-    public function track(string $resourceId, array $metadata = []): void
-    {
-    }
-
-    public function purge(string $resourceId): void
-    {
-    }
-
-    public function getStats(): array
-    {
-        return ['resolver' => 'static', 'endpoint' => $this->endpoint];
-    }
-};
+$resolver = new Fixed($backendEndpoint);
 
 $postgresPort = $envInt('TCP_POSTGRES_PORT', 5432);
 $mysqlPort = $envInt('TCP_MYSQL_PORT', 3306);
