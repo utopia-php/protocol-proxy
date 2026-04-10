@@ -101,58 +101,54 @@ class Adapter
             }
         }
 
-        try {
-            if ($this->callback !== null) {
-                $resolved = ($this->callback)($data);
-                if ($resolved instanceof Resolver\Result) {
-                    $result = $resolved;
-                } elseif (\is_string($resolved)) {
-                    $result = new Resolver\Result(endpoint: $resolved);
-                } else {
-                    throw new ResolverException(
-                        'Resolve callback must return Result or string',
-                        ResolverException::INTERNAL
-                    );
-                }
-            } elseif ($this->resolver !== null) {
-                $result = $this->resolver->resolve($data);
+        if ($this->callback !== null) {
+            $resolved = ($this->callback)($data);
+            if ($resolved instanceof Resolver\Result) {
+                $result = $resolved;
+            } elseif (\is_string($resolved)) {
+                $result = new Resolver\Result(endpoint: $resolved);
             } else {
                 throw new ResolverException(
-                    'No resolver or resolve callback configured',
-                    ResolverException::NOT_FOUND
+                    'Resolve callback must return Result or string',
+                    ResolverException::INTERNAL
                 );
             }
-            $endpoint = $result->endpoint;
-
-            if ($endpoint === '') {
-                throw new ResolverException(
-                    "Resolver returned empty endpoint for: {$data}",
-                    ResolverException::NOT_FOUND
-                );
-            }
-
-            if (!$this->skipValidation) {
-                $endpoint = $this->validate($endpoint);
-            }
-
-            if ($this->cacheTTL > 0) {
-                $this->router->set($data, [
-                    'endpoint' => $endpoint,
-                    'updated' => $now,
-                ]);
-            }
-
-            $metadata = $result->metadata;
-            $metadata['cached'] = false;
-
-            return new ConnectionResult(
-                endpoint: $endpoint,
-                protocol: $this->getProtocol(),
-                metadata: $metadata,
+        } elseif ($this->resolver !== null) {
+            $result = $this->resolver->resolve($data);
+        } else {
+            throw new ResolverException(
+                'No resolver or resolve callback configured',
+                ResolverException::NOT_FOUND
             );
-        } catch (\Exception $e) {
-            throw $e;
         }
+        $endpoint = $result->endpoint;
+
+        if ($endpoint === '') {
+            throw new ResolverException(
+                "Resolver returned empty endpoint for: {$data}",
+                ResolverException::NOT_FOUND
+            );
+        }
+
+        if (! $this->skipValidation) {
+            $endpoint = $this->validate($endpoint);
+        }
+
+        if ($this->cacheTTL > 0) {
+            $this->router->set($data, [
+                'endpoint' => $endpoint,
+                'updated' => $now,
+            ]);
+        }
+
+        $metadata = $result->metadata;
+        $metadata['cached'] = false;
+
+        return new ConnectionResult(
+            endpoint: $endpoint,
+            protocol: $this->getProtocol(),
+            metadata: $metadata,
+        );
     }
 
     /**
