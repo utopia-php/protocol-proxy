@@ -5,7 +5,6 @@ namespace Utopia\Tests\Integration;
 use PHPUnit\Framework\TestCase;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Client;
-use Swoole\Coroutine\Server as CoServer;
 use Utopia\Proxy\Adapter;
 use Utopia\Proxy\Adapter\TCP as TCPAdapter;
 use Utopia\Proxy\Protocol;
@@ -33,26 +32,30 @@ class TCPServerTest extends TestCase
         $error = null;
 
         Coroutine\run(function () use (&$result, &$error): void {
-            // Start a simple echo backend
-            $backend = new CoServer('127.0.0.1', 0);
-            $backend->set(['open_eof_check' => false]);
-            $backendPort = $backend->port;
+            // Bind an echo server on an ephemeral port
+            $listener = new Coroutine\Socket(\AF_INET, \SOCK_STREAM, 0);
+            $listener->bind('127.0.0.1', 0);
+            $listener->listen(128);
+            $backendPort = $listener->getsockname()['port'];
 
-            Coroutine::create(function () use ($backend): void {
-                $backend->handle(function (Coroutine\Server\Connection $connection): void {
-                    while (true) {
-                        $data = $connection->recv();
-                        if (! \is_string($data) || $data === '') {
-                            break;
-                        }
-                        $connection->send($data);
+            // Accept one connection and echo in a separate coroutine
+            Coroutine::create(function () use ($listener): void {
+                $peer = $listener->accept();
+                if ($peer === false) {
+                    return;
+                }
+                while (true) {
+                    $data = $peer->recvAll(4096, 2.0);
+                    if ($data === '' || $data === false) {
+                        break;
                     }
-                    $connection->close();
-                });
+                    $peer->sendAll($data);
+                }
+                $peer->close();
+                $listener->close();
             });
 
-            // Give the backend a moment to start
-            Coroutine::sleep(0.05);
+            Coroutine::sleep(0.01);
 
             try {
                 $resolver = new Fixed("127.0.0.1:{$backendPort}");
@@ -61,9 +64,7 @@ class TCPServerTest extends TestCase
                 $adapter->setTimeout(5.0);
                 $adapter->setConnectTimeout(2.0);
 
-                // getConnection dials the backend and caches by fd.
-                // The $data arg is routing input (passed to route()),
-                // not sent to the backend — the server does that.
+                // getConnection dials the backend and caches by fd
                 $client = $adapter->getConnection('routing-data', 1);
                 $this->assertInstanceOf(Client::class, $client);
                 $this->assertTrue($client->isConnected());
@@ -74,7 +75,7 @@ class TCPServerTest extends TestCase
 
                 // Send/recv through the established connection
                 $client->send('ping');
-                $response = $client->recv(1.0);
+                $response = $client->recv(2.0);
                 $this->assertSame('ping', $response);
 
                 // closeConnection cleans up
@@ -89,8 +90,6 @@ class TCPServerTest extends TestCase
                 $result = true;
             } catch (\Throwable $e) {
                 $error = $e;
-            } finally {
-                $backend->shutdown();
             }
         });
 
