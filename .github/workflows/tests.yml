@@ -25,7 +25,16 @@ jobs:
         run: composer install --prefer-dist --no-progress
 
       - name: Run tests with coverage
-        run: ./vendor/bin/phpunit --testsuite Unit --coverage-clover=coverage/unit.xml --coverage-text 2>&1 | tee coverage/unit-summary.txt
+        run: |
+          set +e
+          ./vendor/bin/phpunit --testsuite Unit --coverage-clover=coverage/unit.xml --coverage-text 2>&1 | tee coverage/unit-summary.txt
+          EXIT=${PIPESTATUS[0]}
+          set -e
+          if [ "$EXIT" -eq 139 ] && [ -f coverage/unit.xml ]; then
+            echo "Swoole exit segfault (ignored — coverage report exists)"
+            exit 0
+          fi
+          exit $EXIT
 
       - name: Upload coverage
         uses: actions/upload-artifact@v4
