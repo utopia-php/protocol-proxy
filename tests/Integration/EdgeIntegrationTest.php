@@ -258,15 +258,13 @@ class EdgeIntegrationTest extends TestCase
         $first = $adapter->route('invaldb');
         $this->assertFalse($first->metadata['cached']);
 
-        $resolver->purge('invaldb');
-
         // Wait for the routing table cache to expire
         sleep(2);
 
         $second = $adapter->route('invaldb');
         $this->assertFalse($second->metadata['cached']);
 
-        // Should have resolved twice
+        // Should have resolved twice (cache expired, forced re-resolve)
         $this->assertSame(2, $resolver->getResolveCount());
     }
 
@@ -439,11 +437,6 @@ class EdgeMockResolver implements Resolver
     public function getResolveCount(): int
     {
         return $this->resolveCount;
-    }
-
-    public function purge(string $data): void
-    {
-        unset($this->databases[$data]);
     }
 }
 
