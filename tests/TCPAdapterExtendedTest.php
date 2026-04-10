@@ -247,9 +247,7 @@ class TCPAdapterExtendedTest extends TestCase
         $this->assertSame(Protocol::RethinkDB, $adapter->getProtocol());
     }
 
-    /**
-     * @dataProvider allPortProtocolProvider
-     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('allPortProtocolProvider')]
     public function testAllPortProtocolMappings(int $port, Protocol $expected): void
     {
         $adapter = new TCPAdapter(port: $port, resolver: $this->resolver);

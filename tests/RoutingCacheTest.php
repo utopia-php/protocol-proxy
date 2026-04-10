@@ -88,9 +88,18 @@ class RoutingCacheTest extends TestCase
             usleep(1000);
         }
 
-        $adapter->route('resource-1');
-        $adapter->route('resource-2');
+        $result1 = $adapter->route('resource-1');
+        $result2 = $adapter->route('resource-2');
 
+        $this->assertFalse($result1->metadata['cached']);
+        $this->assertFalse($result2->metadata['cached']);
+
+        // Second call to each should hit cache
+        $cached1 = $adapter->route('resource-1');
+        $cached2 = $adapter->route('resource-2');
+
+        $this->assertTrue($cached1->metadata['cached']);
+        $this->assertTrue($cached2->metadata['cached']);
     }
 
     public function testCacheHitPreservesProtocol(): void
