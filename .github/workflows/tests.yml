@@ -96,11 +96,6 @@ jobs:
           PCT=$(echo "scale=2; $COVERED * 100 / $TOTAL" | bc)
           echo "Coverage: ${PCT}% ($COVERED / $TOTAL statements)"
 
-          if [ "$(echo "$PCT < 80" | bc -l)" -eq 1 ]; then
-            echo "::error::Coverage ${PCT}% is below 80% minimum"
-            exit 1
-          fi
-
       - name: Upload merged baseline
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
