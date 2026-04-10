@@ -53,11 +53,13 @@ jobs:
 
       - name: Run tests with coverage
         run: |
+          set +e
           ./vendor/bin/phpunit --testsuite Integration --coverage-clover=coverage/integration.xml --coverage-text 2>&1 | tee coverage/integration-summary.txt
-          EXIT=$?
+          EXIT=${PIPESTATUS[0]}
+          set -e
           # Swoole can segfault on process exit after coverage generation;
           # treat it as success if the clover report was written.
-          if [ $EXIT -eq 139 ] && [ -f coverage/integration.xml ]; then
+          if [ "$EXIT" -eq 139 ] && [ -f coverage/integration.xml ]; then
             echo "Swoole exit segfault (ignored — coverage report exists)"
             exit 0
           fi
