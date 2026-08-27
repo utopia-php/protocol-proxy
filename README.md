@@ -28,7 +28,7 @@ C load generators at `benchmarks/tcpbench.c` and `benchmarks/httpbench/`.
 
 ## Requirements
 
-- PHP >= 8.4
+- PHP >= 8.5
 - ext-swoole >= 6.0
 - ext-redis
 

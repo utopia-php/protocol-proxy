@@ -10,11 +10,11 @@
         }
     ],
     "require": {
-        "php": ">=8.4",
+        "php": ">=8.5",
         "ext-redis": "*",
         "ext-swoole": ">=6.0",
         "utopia-php/console": "*",
-        "utopia-php/validators": "*"
+        "utopia-php/validators": "^0.6"
     },
     "require-dev": {
         "phpunit/phpunit": "12.*",
@@ -45,7 +45,7 @@
         "check": "phpstan analyse --level=max --memory-limit=2G src tests"
     },
     "config": {
-        "php": "8.4",
+        "php": "8.5",
         "optimize-autoloader": true,
         "sort-packages": true,
         "allow-plugins": {

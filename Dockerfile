@@ -4,7 +4,7 @@
 #   runtime image loads via src/Sockmap/Loader.php. We use clang in a
 #   throwaway image so the runtime doesn't carry the LLVM toolchain.
 #
-# Stage 2 (runtime): slim PHP 8.4 Alpine image with swoole + ffi + libbpf
+# Stage 2 (runtime): slim PHP 8.5 Alpine image with swoole + ffi + libbpf
 #   + libjemalloc installed. The sockmap BPF object from stage 1 is
 #   copied in at /opt/proxy/relay.bpf.o and referenced by TCP_SOCKMAP_BPF_OBJECT.
 #
@@ -80,7 +80,7 @@ RUN clang -O2 -g -target bpf \
     ls -la relay.bpf.o
 
 # ------------- stage 2: runtime -------------
-FROM php:8.4.18-cli-alpine3.23
+FROM php:8.5-cli-alpine3.23
 
 RUN apk update && apk upgrade && apk add --no-cache \
     autoconf \

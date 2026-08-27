@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "99280271f19e528293e79946fe10614f",
+    "content-hash": "fb3633da57057dab5e56dc1e5fdabfed",
     "packages": [
         {
             "name": "utopia-php/console",
@@ -56,25 +56,20 @@
         },
         {
             "name": "utopia-php/validators",
-            "version": "0.2.0",
+            "version": "0.6.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/utopia-php/validators.git",
-                "reference": "30b6030a5b100fc1dff34506e5053759594b2a20"
+                "reference": "7afdde56a7a635f0cb3d8a5e22ebbef40baf31dc"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/utopia-php/validators/zipball/30b6030a5b100fc1dff34506e5053759594b2a20",
-                "reference": "30b6030a5b100fc1dff34506e5053759594b2a20",
+                "url": "https://api.github.com/repos/utopia-php/validators/zipball/7afdde56a7a635f0cb3d8a5e22ebbef40baf31dc",
+                "reference": "7afdde56a7a635f0cb3d8a5e22ebbef40baf31dc",
                 "shasum": ""
             },
             "require": {
-                "php": ">=8.0"
-            },
-            "require-dev": {
-                "laravel/pint": "1.*",
-                "phpstan/phpstan": "2.*",
-                "phpunit/phpunit": "11.*"
+                "php": ">=8.5"
             },
             "type": "library",
             "autoload": {
@@ -95,9 +90,9 @@
             ],
             "support": {
                 "issues": "https://github.com/utopia-php/validators/issues",
-                "source": "https://github.com/utopia-php/validators/tree/0.2.0"
+                "source": "https://github.com/utopia-php/validators/tree/0.6.0"
             },
-            "time": "2026-01-13T09:16:51+00:00"
+            "time": "2026-08-27T04:46:08+00:00"
         }
     ],
     "packages-dev": [
@@ -1900,10 +1895,10 @@
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
-        "php": ">=8.4",
+        "php": ">=8.5",
         "ext-redis": "*",
         "ext-swoole": ">=6.0"
     },
     "platform-dev": {},
-    "plugin-api-version": "2.6.0"
+    "plugin-api-version": "2.9.0"
 }
